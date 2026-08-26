@@ -19,41 +19,25 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
   const loopStartRef = useRef(0);
   const loopEndRef = useRef(3); // 3秒ループ
   const isLoopingRef = useRef(isLooping);
-  const lastLoopTimeRef = useRef<number | null>(null);
+  const isSeekingRef = useRef(false);
+  const seekStartTimeRef = useRef<number | null>(null);
 
   isLoopingRef.current = isLooping;
 
-  // iOS Safari 高速シーク処理 (fastSeek)
-  const seekTo = (time: number) => {
-    const v = videoRef.current;
-    if (!v) return;
-    if ("fastSeek" in v && typeof (v as unknown as { fastSeek: (t: number) => void }).fastSeek === "function") {
-      (v as unknown as { fastSeek: (t: number) => void }).fastSeek(time);
-    } else {
-      v.currentTime = time;
-    }
-  };
-
-  // 再生時間の監視 & 高精度ループ判定 (rAF)
+  // 再生時間の監視 & ループ判定 (rAF)
   useEffect(() => {
     let animId: number;
 
     const checkLoop = () => {
       const v = videoRef.current;
-      if (v) {
+      if (v && !isSeekingRef.current) {
         setCurrentTime(v.currentTime);
 
         // ループ判定
         if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
-          const now = performance.now();
-          if (lastLoopTimeRef.current !== null) {
-            const expectedDuration = (loopEndRef.current - loopStartRef.current) * 1000;
-            const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
-            setLoopGap(pureGap);
-          }
-          
-          seekTo(loopStartRef.current);
-          lastLoopTimeRef.current = performance.now();
+          isSeekingRef.current = true;
+          seekStartTimeRef.current = performance.now();
+          v.currentTime = loopStartRef.current;
         }
       }
       animId = requestAnimationFrame(checkLoop);
@@ -62,6 +46,16 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     animId = requestAnimationFrame(checkLoop);
     return () => cancelAnimationFrame(animId);
   }, []);
+
+  // シーク完了時の処理（純粋なシーク遅延時間を計測）
+  const handleSeeked = () => {
+    if (seekStartTimeRef.current !== null) {
+      const gap = Math.round(performance.now() - seekStartTimeRef.current);
+      setLoopGap(gap);
+      seekStartTimeRef.current = null;
+    }
+    isSeekingRef.current = false;
+  };
 
   // 動画読み込み完了時の処理
   const handleLoadedMetadata = () => {
@@ -92,11 +86,15 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     setPlaybackRate(rate);
   };
 
-  // シークバー手動操作
+  // シークバー手動操作（安全なシーク）
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
-    seekTo(newTime);
+    const v = videoRef.current;
+    // 動画の準備ができている場合のみシーク処理を実行
+    if (v && v.readyState >= 1) {
+      v.currentTime = newTime;
+    }
   };
 
   // ループ切り替え
@@ -109,7 +107,6 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
         videoRef.current.currentTime + 3,
         videoRef.current.duration || 3
       );
-      lastLoopTimeRef.current = performance.now();
     }
   };
 
@@ -120,6 +117,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
         src={src}
         playsInline
         onLoadedMetadata={handleLoadedMetadata}
+        onSeeked={handleSeeked}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full rounded-lg bg-black aspect-video object-contain"
