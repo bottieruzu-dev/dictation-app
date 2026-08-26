@@ -36,8 +36,9 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
         if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
           const now = performance.now();
           if (lastLoopTimeRef.current !== null) {
-            const gap = now - lastLoopTimeRef.current;
-            setLoopGap(Math.round(gap));
+            const expectedDuration = (loopEndRef.current - loopStartRef.current) * 1000;
+            const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
+            setLoopGap(pureGap);
           }
           v.currentTime = loopStartRef.current;
           lastLoopTimeRef.current = performance.now();
@@ -178,7 +179,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           </b>
         </div>
         <div>
-          loop gap:{" "}
+          loop gap (pure):{" "}
           <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
         </div>
       </div>
