@@ -15,6 +15,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
   const [isLooping, setIsLooping] = useState(false);
   const [loopGap, setLoopGap] = useState<number | null>(null);
   const [seekableOk, setSeekableOk] = useState(false);
+  const [isDragging, setIsDragging] = useState(false); // ドラッグ中判定
 
   const loopStartRef = useRef(0);
   const loopEndRef = useRef(3); // 3秒ループ
@@ -30,7 +31,8 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
     const checkLoop = () => {
       const v = videoRef.current;
-      if (v && !isSeekingRef.current) {
+      // ドラッグ中やシーク中は時間を上書きしない
+      if (v && !isSeekingRef.current && !isDragging) {
         setCurrentTime(v.currentTime);
 
         // ループ判定
@@ -45,9 +47,9 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
     animId = requestAnimationFrame(checkLoop);
     return () => cancelAnimationFrame(animId);
-  }, []);
+  }, [isDragging]);
 
-  // シーク完了時の処理（純粋なシーク遅延時間を計測）
+  // シーク完了時の処理
   const handleSeeked = () => {
     if (seekStartTimeRef.current !== null) {
       const gap = Math.round(performance.now() - seekStartTimeRef.current);
@@ -86,15 +88,20 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     setPlaybackRate(rate);
   };
 
-  // シークバー手動操作（安全なシーク）
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // シークバー操作中（表示のみ更新してデコーダーのパンクを防ぐ）
+  const handleSeekInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsDragging(true);
+    setCurrentTime(parseFloat(e.target.value));
+  };
+
+  // シークバー操作完了（指を離した時に1回だけ動画位置を変更）
+  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
-    setCurrentTime(newTime);
     const v = videoRef.current;
-    // 動画の準備ができている場合のみシーク処理を実行
-    if (v && v.readyState >= 1) {
+    if (v) {
       v.currentTime = newTime;
     }
+    setIsDragging(false);
   };
 
   // ループ切り替え
@@ -131,8 +138,8 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           max={duration || 100}
           step={0.01}
           value={currentTime}
-          onChange={handleSeek}
-          onInput={handleSeek}
+          onInput={handleSeekInput}
+          onChange={handleSeekChange}
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
         />
         <div className="flex justify-between text-xs text-gray-500 font-mono">
@@ -187,7 +194,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           </b>
         </div>
         <div>
-          loop gap (pure):{" "}
+          loop gap (v1.1):{" "}
           <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
         </div>
       </div>
