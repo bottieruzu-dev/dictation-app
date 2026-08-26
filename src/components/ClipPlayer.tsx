@@ -15,7 +15,10 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
   const [isLooping, setIsLooping] = useState(false);
   const [loopGap, setLoopGap] = useState<number | null>(null);
   const [seekableOk, setSeekableOk] = useState(false);
-  const [isDragging, setIsDragging] = useState(false); // ドラッグ中判定
+  
+  // ドラッグ状態をRefでも管理し、常に最新の判定を行う
+  const isDraggingRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const loopStartRef = useRef(0);
   const loopEndRef = useRef(3); // 3秒ループ
@@ -25,6 +28,11 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
   isLoopingRef.current = isLooping;
 
+  const setDragging = (val: boolean) => {
+    isDraggingRef.current = val;
+    setIsDragging(val);
+  };
+
   // 再生時間の監視 & ループ判定 (rAF)
   useEffect(() => {
     let animId: number;
@@ -32,7 +40,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     const checkLoop = () => {
       const v = videoRef.current;
       // ドラッグ中やシーク中は時間を上書きしない
-      if (v && !isSeekingRef.current && !isDragging) {
+      if (v && !isSeekingRef.current && !isDraggingRef.current) {
         setCurrentTime(v.currentTime);
 
         // ループ判定
@@ -47,7 +55,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
     animId = requestAnimationFrame(checkLoop);
     return () => cancelAnimationFrame(animId);
-  }, [isDragging]);
+  }, []);
 
   // シーク完了時の処理
   const handleSeeked = () => {
@@ -88,20 +96,20 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     setPlaybackRate(rate);
   };
 
-  // シークバー操作中（表示のみ更新してデコーダーのパンクを防ぐ）
-  const handleSeekInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIsDragging(true);
+  // シークバー操作中（表示だけ更新）
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentTime(parseFloat(e.target.value));
   };
 
-  // シークバー操作完了（指を離した時に1回だけ動画位置を変更）
-  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = parseFloat(e.target.value);
+  // シークバー操作完了時（指を離した瞬間に確実に動画を更新）
+  const handlePointerUp = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    setDragging(false);
+    const newTime = parseFloat((e.currentTarget as HTMLInputElement).value);
     const v = videoRef.current;
-    if (v) {
+    // 動画の準備ができている場合のみ時間を更新する
+    if (v && v.readyState >= 1) {
       v.currentTime = newTime;
     }
-    setIsDragging(false);
   };
 
   // ループ切り替え
@@ -138,8 +146,11 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           max={duration || 100}
           step={0.01}
           value={currentTime}
-          onInput={handleSeekInput}
-          onChange={handleSeekChange}
+          onPointerDown={() => setDragging(true)}
+          onTouchStart={() => setDragging(true)}
+          onInput={handleInput}
+          onPointerUp={handlePointerUp}
+          onTouchEnd={handlePointerUp}
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
         />
         <div className="flex justify-between text-xs text-gray-500 font-mono">
@@ -194,7 +205,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           </b>
         </div>
         <div>
-          loop gap (v1.1):{" "}
+          loop gap (v1.2):{" "}
           <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
         </div>
       </div>
