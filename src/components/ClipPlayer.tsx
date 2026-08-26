@@ -10,48 +10,108 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1.0);
+  const [isLooping, setIsLooping] = useState(false);
+  const [loopGap, setLoopGap] = useState<number | null>(null);
+  const [seekableOk, setSeekableOk] = useState(false);
 
-  // 画面にログを記録する関数
-  const addLog = (msg: string) => {
-    const time = new Date().toISOString().split("T")[1].slice(3, -1);
-    setLogs((prev) => [`[${time}] ${msg}`, ...prev].slice(0, 30)); // 最新30件を降順表示
-  };
+  // ドラッグ状態
+  const isDraggingRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // 動画のイベントを監視
-  const logEvent = (eventName: string) => {
-    const v = videoRef.current;
-    const rs = v ? v.readyState : "null";
-    addLog(`event: ${eventName} (readyState: ${rs})`);
-  };
+  const loopStartRef = useRef(0);
+  const loopEndRef = useRef(3);
+  const isLoopingRef = useRef(isLooping);
+  const lastLoopTimeRef = useRef<number | null>(null);
 
+  isLoopingRef.current = isLooping;
+
+  // 再生時間の監視 & ループ判定 (rAF)
   useEffect(() => {
     let animId: number;
-    const checkTime = () => {
-      if (videoRef.current) {
-        setCurrentTime(videoRef.current.currentTime);
+    const checkLoop = () => {
+      const v = videoRef.current;
+      // 指でシークバーを触っていない時だけ、動画の時間をUIに反映
+      if (v && !isDraggingRef.current) {
+        setCurrentTime(v.currentTime);
+
+        // ループ判定
+        if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
+          const now = performance.now();
+          if (lastLoopTimeRef.current !== null) {
+            const expectedDuration = (loopEndRef.current - loopStartRef.current) * 1000;
+            const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
+            setLoopGap(pureGap);
+          }
+          v.currentTime = loopStartRef.current;
+          lastLoopTimeRef.current = performance.now();
+        }
       }
-      animId = requestAnimationFrame(checkTime);
+      animId = requestAnimationFrame(checkLoop);
     };
-    animId = requestAnimationFrame(checkTime);
+    animId = requestAnimationFrame(checkLoop);
     return () => cancelAnimationFrame(animId);
   }, []);
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = parseFloat(e.target.value);
+  // 動画読み込み完了時
+  const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
+    setDuration(v.duration);
+    setSeekableOk(v.seekable.length > 0);
+  };
 
-    try {
-      addLog(`--- シーク操作開始 ---`);
-      addLog(`変更前: ${v.currentTime.toFixed(2)} -> 変更後: ${newTime.toFixed(2)}`);
-      addLog(`現在の readyState: ${v.readyState}`);
-      
-      v.currentTime = newTime;
-      
-      addLog(`v.currentTime への代入完了`);
-    } catch (err: any) {
-      addLog(`🚨エラー発生: ${err.name} / ${err.message}`);
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (isPlaying) {
+      v.pause();
+      setIsPlaying(false);
+    } else {
+      void v.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const changeSpeed = (rate: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.playbackRate = rate;
+    setPlaybackRate(rate);
+  };
+
+  // 1. スワイプ中：UIの見た目だけを変える（動画へは一切命令しない）
+  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    setCurrentTime(parseFloat(e.target.value));
+  };
+
+  // 2. 指を離した時：1回だけ動画へ位置を伝達する
+  const handleSeekEnd = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const newTime = parseFloat((e.currentTarget as HTMLInputElement).value);
+    const v = videoRef.current;
+    if (v) {
+      v.currentTime = newTime; // ここで初めて動画へ1回だけ命令
+    }
+    // Safariの内部処理完了を待つため、200ms後にUIロックを解除
+    setTimeout(() => {
+      isDraggingRef.current = false;
+      setIsDragging(false);
+    }, 200);
+  };
+
+  const toggleLoop = () => {
+    const newLoop = !isLooping;
+    setIsLooping(newLoop);
+    if (newLoop && videoRef.current) {
+      loopStartRef.current = videoRef.current.currentTime;
+      loopEndRef.current = Math.min(
+        videoRef.current.currentTime + 3,
+        videoRef.current.duration || 3
+      );
+      lastLoopTimeRef.current = performance.now();
     }
   };
 
@@ -62,22 +122,13 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
         src={src}
         playsInline
         preload="auto"
-        onLoadStart={() => logEvent("loadstart")}
-        onLoadedMetadata={() => {
-          logEvent("loadedmetadata");
-          if (videoRef.current) setDuration(videoRef.current.duration);
-        }}
-        onCanPlay={() => logEvent("canplay")}
-        onPlay={() => logEvent("play")}
-        onPlaying={() => logEvent("playing")}
-        onPause={() => logEvent("pause")}
-        onWaiting={() => logEvent("waiting")}
-        onSeeking={() => logEvent("seeking")}
-        onSeeked={() => logEvent("seeked")}
-        onError={(e) => addLog(`🚨動画エラー: ${videoRef.current?.error?.message}`)}
+        onLoadedMetadata={handleLoadedMetadata}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
         className="w-full rounded-lg bg-black aspect-video object-contain"
       />
 
+      {/* シークバー */}
       <div className="space-y-1">
         <input
           type="range"
@@ -85,7 +136,9 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           max={duration || 100}
           step={0.01}
           value={currentTime}
-          onChange={handleSeek}
+          onChange={handleSeekChange}
+          onPointerUp={handleSeekEnd}
+          onTouchEnd={handleSeekEnd}
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
         />
         <div className="flex justify-between text-xs text-gray-500 font-mono">
@@ -96,31 +149,52 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
       <div className="flex items-center justify-between gap-2">
         <button
-          onClick={() => {
-            addLog("PLAYボタン押下");
-            videoRef.current?.play().catch((e) => addLog(`🚨Play拒否: ${e.message}`));
-          }}
+          onClick={togglePlay}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm"
         >
-          PLAY
+          {isPlaying ? "PAUSE" : "PLAY"}
         </button>
+
+        <div className="flex gap-1">
+          {[0.6, 1.0, 1.2].map((rate) => (
+            <button
+              key={rate}
+              onClick={() => changeSpeed(rate)}
+              className={`px-2 py-1 rounded text-xs font-bold ${
+                playbackRate === rate
+                  ? "bg-gray-800 text-white"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {rate}x
+            </button>
+          ))}
+        </div>
+
         <button
-          onClick={() => {
-            addLog("PAUSEボタン押下");
-            videoRef.current?.pause();
-          }}
-          className="px-4 py-2 bg-gray-600 text-white rounded-lg font-bold text-sm"
+          onClick={toggleLoop}
+          className={`px-3 py-2 rounded-lg font-bold text-xs ${
+            isLooping
+              ? "bg-green-600 text-white"
+              : "bg-gray-200 text-gray-700"
+          }`}
         >
-          PAUSE
+          {isLooping ? "LOOP ON" : "LOOP OFF"}
         </button>
       </div>
 
-      {/* デバッグログ表示エリア */}
-      <div className="bg-gray-900 text-green-400 text-[10px] font-mono p-2 rounded h-64 overflow-y-auto whitespace-pre-wrap">
-        <div>【内部動作ログ (最新が上)】</div>
-        {logs.map((log, i) => (
-          <div key={i}>{log}</div>
-        ))}
+      {/* デバッグ情報 */}
+      <div className="p-3 bg-gray-50 rounded-lg text-xs space-y-1 font-mono text-gray-700">
+        <div>
+          seekable (Range対応):{" "}
+          <b className={seekableOk ? "text-green-600" : "text-red-600"}>
+            {seekableOk ? "OK" : "NG"}
+          </b>
+        </div>
+        <div>
+          loop gap (v1.4):{" "}
+          <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
+        </div>
       </div>
     </div>
   );
