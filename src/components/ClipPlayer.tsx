@@ -2,77 +2,143 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export default function ClipPlayer({ src }: { src: string }) {
+interface ClipPlayerProps {
+  src: string;
+}
+
+export default function ClipPlayer({ src }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1.0);
+  const [isLooping, setIsLooping] = useState(false);
+  const [loopGap, setLoopGap] = useState<number | null>(null);
+  const [seekableOk, setSeekableOk] = useState(false);
 
-  // ログを追加する関数（最新が一番上に来るように40件保持）
-  const addLog = (msg: string) => {
-    const time = new Date().toISOString().split("T")[1].slice(3, -1);
-    setLogs((prev) => [`[${time}] ${msg}`, ...prev].slice(0, 40));
-  };
+  // ドラッグ状態管理
+  const isDraggingRef = useRef(false);
+  
+  // 再生前の「予約シーク時間」を記憶する
+  const pendingSeekTimeRef = useRef<number | null>(null);
 
-  // シークバーから指を離した時の処理
-  const handlePointerUp = (e: React.SyntheticEvent<HTMLInputElement>) => {
-    const v = videoRef.current;
-    if (!v) return;
-    const targetTime = parseFloat((e.currentTarget as HTMLInputElement).value);
-    
-    addLog(`--- 指を離した ---`);
-    addLog(`1. 目標時間: ${targetTime.toFixed(2)}`);
-    addLog(`2. 代入前の readyState: ${v.readyState}`);
-    addLog(`3. 代入前の currentTime: ${v.currentTime.toFixed(2)}`);
-    
-    try {
-      v.currentTime = targetTime;
-      addLog(`4. 代入直後の currentTime: ${v.currentTime.toFixed(2)}`);
-    } catch (err: any) {
-      addLog(`🚨 代入エラー: ${err.message}`);
-    }
+  const loopStartRef = useRef(0);
+  const loopEndRef = useRef(3);
+  const isLoopingRef = useRef(isLooping);
+  const lastLoopTimeRef = useRef<number | null>(null);
 
-    // 200ミリ秒後にSafariが値をどう処理したか確認
-    setTimeout(() => {
-      if (videoRef.current) {
-        addLog(`5. 代入200ms後の currentTime: ${videoRef.current.currentTime.toFixed(2)}`);
-      }
-    }, 200);
-  };
+  isLoopingRef.current = isLooping;
 
-  // PLAYボタンを押した時の処理
-  const handlePlay = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    addLog(`--- PLAY押下 ---`);
-    addLog(`6. Play直前の currentTime: ${v.currentTime.toFixed(2)}`);
-    
-    v.play().then(() => {
-      addLog(`7. Play成功時の currentTime: ${v.currentTime.toFixed(2)}`);
-    }).catch((err) => {
-      addLog(`🚨 Play失敗: ${err.message}`);
-    });
-  };
-
-  // 常に時間を監視し、Safariが勝手に0秒にリセットした瞬間を捕まえる
+  // 再生時間の監視 & ループ判定 (rAF)
   useEffect(() => {
     let animId: number;
-    let lastTime = -1;
-    const checkTime = () => {
+    const checkLoop = () => {
       const v = videoRef.current;
-      if (v) {
-         setCurrentTime(v.currentTime);
-         // 時間が突然1秒以上ワープした（リセットされた）場合ログに出す
-         if (lastTime !== -1 && Math.abs(v.currentTime - lastTime) > 1) {
-             addLog(`⚠️ ワープ検知: ${lastTime.toFixed(2)}秒 -> ${v.currentTime.toFixed(2)}秒`);
-         }
-         lastTime = v.currentTime;
+      // 指でシークバーを触っていない時だけ動画の時間をUIに反映
+      if (v && !isDraggingRef.current) {
+        // 予約シーク中はUIの時間を上書きしない
+        if (pendingSeekTimeRef.current === null) {
+          setCurrentTime(v.currentTime);
+        }
+
+        // ループ判定
+        if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
+          const now = performance.now();
+          if (lastLoopTimeRef.current !== null) {
+            const expectedDuration = (loopEndRef.current - loopStartRef.current) * 1000;
+            const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
+            setLoopGap(pureGap);
+          }
+          v.currentTime = loopStartRef.current;
+          lastLoopTimeRef.current = performance.now();
+        }
       }
-      animId = requestAnimationFrame(checkTime);
+      animId = requestAnimationFrame(checkLoop);
     };
-    animId = requestAnimationFrame(checkTime);
+    animId = requestAnimationFrame(checkLoop);
     return () => cancelAnimationFrame(animId);
   }, []);
+
+  // 動画読み込み完了時
+  const handleLoadedMetadata = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    setDuration(v.duration);
+    setSeekableOk(v.seekable.length > 0);
+  };
+
+  // PLAYが押され、Safariが再生を許可した瞬間に呼ばれる
+  const handlePlayEvent = () => {
+    setIsPlaying(true);
+    const v = videoRef.current;
+    // 予約されていたシーク時間があれば、この瞬間にワープさせる
+    if (v && pendingSeekTimeRef.current !== null) {
+      v.currentTime = pendingSeekTimeRef.current;
+      pendingSeekTimeRef.current = null;
+    }
+  };
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (isPlaying) {
+      v.pause();
+      setIsPlaying(false);
+    } else {
+      void v.play();
+    }
+  };
+
+  const changeSpeed = (rate: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.playbackRate = rate;
+    setPlaybackRate(rate);
+  };
+
+  // スワイプ開始
+  const handlePointerDown = () => {
+    isDraggingRef.current = true;
+  };
+
+  // スワイプ中（UIの数字とバーだけを動かす）
+  const handleSeekInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentTime(parseFloat(e.target.value));
+  };
+
+  // 指を離した時
+  const handleSeekEnd = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const newTime = parseFloat((e.currentTarget as HTMLInputElement).value);
+    const v = videoRef.current;
+    
+    if (v) {
+      // readyState 1 は動画データがない状態（再生前など）
+      if (v.readyState <= 1 && !isPlaying) {
+        pendingSeekTimeRef.current = newTime; // 予約だけしておく
+        setCurrentTime(newTime); // 画面上は移動したように見せる
+      } else {
+        v.currentTime = newTime; // 再生中なら即座に移動
+      }
+    }
+    
+    // ロック解除
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 100);
+  };
+
+  const toggleLoop = () => {
+    const newLoop = !isLooping;
+    setIsLooping(newLoop);
+    if (newLoop && videoRef.current) {
+      loopStartRef.current = videoRef.current.currentTime;
+      loopEndRef.current = Math.min(
+        videoRef.current.currentTime + 3,
+        videoRef.current.duration || 3
+      );
+      lastLoopTimeRef.current = performance.now();
+    }
+  };
 
   return (
     <div className="max-w-md mx-auto p-4 bg-white rounded-xl shadow-md space-y-4 border border-gray-200">
@@ -81,16 +147,13 @@ export default function ClipPlayer({ src }: { src: string }) {
         src={src}
         playsInline
         preload="auto"
-        onLoadedMetadata={() => {
-          addLog("● loadedmetadata発火");
-          if (videoRef.current) setDuration(videoRef.current.duration);
-        }}
-        onSeeking={() => addLog(`● seeking発火 (現在地: ${videoRef.current?.currentTime.toFixed(2)})`)}
-        onSeeked={() => addLog(`● seeked発火 (現在地: ${videoRef.current?.currentTime.toFixed(2)})`)}
-        onPlay={() => addLog(`● playイベント発火 (現在地: ${videoRef.current?.currentTime.toFixed(2)})`)}
+        onLoadedMetadata={handleLoadedMetadata}
+        onPlay={handlePlayEvent}
+        onPause={() => setIsPlaying(false)}
         className="w-full rounded-lg bg-black aspect-video object-contain"
       />
 
+      {/* シークバー */}
       <div className="space-y-1">
         <input
           type="range"
@@ -98,9 +161,11 @@ export default function ClipPlayer({ src }: { src: string }) {
           max={duration || 100}
           step={0.01}
           value={currentTime}
-          onChange={(e) => setCurrentTime(parseFloat(e.target.value))}
-          onPointerUp={handlePointerUp}
-          onTouchEnd={handlePointerUp}
+          onPointerDown={handlePointerDown}
+          onTouchStart={handlePointerDown}
+          onChange={handleSeekInput}
+          onPointerUp={handleSeekEnd}
+          onTouchEnd={handleSeekEnd}
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
         />
         <div className="flex justify-between text-xs text-gray-500 font-mono">
@@ -109,16 +174,54 @@ export default function ClipPlayer({ src }: { src: string }) {
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <button onClick={handlePlay} className="px-4 py-2 bg-blue-600 text-white rounded font-bold text-sm">PLAY</button>
-        <button onClick={() => videoRef.current?.pause()} className="px-4 py-2 bg-gray-600 text-white rounded font-bold text-sm">PAUSE</button>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={togglePlay}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm"
+        >
+          {isPlaying ? "PAUSE" : "PLAY"}
+        </button>
+
+        <div className="flex gap-1">
+          {[0.6, 1.0, 1.2].map((rate) => (
+            <button
+              key={rate}
+              onClick={() => changeSpeed(rate)}
+              className={`px-2 py-1 rounded text-xs font-bold ${
+                playbackRate === rate
+                  ? "bg-gray-800 text-white"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {rate}x
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={toggleLoop}
+          className={`px-3 py-2 rounded-lg font-bold text-xs ${
+            isLooping
+              ? "bg-green-600 text-white"
+              : "bg-gray-200 text-gray-700"
+          }`}
+        >
+          {isLooping ? "LOOP ON" : "LOOP OFF"}
+        </button>
       </div>
 
-      <div className="bg-gray-900 text-green-400 text-[10px] font-mono p-2 rounded h-64 overflow-y-auto whitespace-pre-wrap">
-        <div>【調査ログ (最新が上)】</div>
-        {logs.map((log, i) => (
-          <div key={i}>{log}</div>
-        ))}
+      {/* デバッグ情報 */}
+      <div className="p-3 bg-gray-50 rounded-lg text-xs space-y-1 font-mono text-gray-700">
+        <div>
+          seekable (Range対応):{" "}
+          <b className={seekableOk ? "text-green-600" : "text-red-600"}>
+            {seekableOk ? "OK" : "NG"}
+          </b>
+        </div>
+        <div>
+          loop gap (v1.5):{" "}
+          <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
+        </div>
       </div>
     </div>
   );
