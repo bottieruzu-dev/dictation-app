@@ -15,16 +15,15 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
   const [isLooping, setIsLooping] = useState(false);
   const [loopGap, setLoopGap] = useState<number | null>(null);
   const [seekableOk, setSeekableOk] = useState(false);
-  
-  // ドラッグ状態をRefでも管理し、常に最新の判定を行う
+
+  // ドラッグ状態管理
   const isDraggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const loopStartRef = useRef(0);
   const loopEndRef = useRef(3); // 3秒ループ
   const isLoopingRef = useRef(isLooping);
-  const isSeekingRef = useRef(false);
-  const seekStartTimeRef = useRef<number | null>(null);
+  const lastLoopTimeRef = useRef<number | null>(null);
 
   isLoopingRef.current = isLooping;
 
@@ -39,15 +38,20 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
     const checkLoop = () => {
       const v = videoRef.current;
-      // ドラッグ中やシーク中は時間を上書きしない
-      if (v && !isSeekingRef.current && !isDraggingRef.current) {
+      // ドラッグ中（操作中〜反映待ち）は時間を上書きしない
+      if (v && !isDraggingRef.current) {
         setCurrentTime(v.currentTime);
 
         // ループ判定
         if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
-          isSeekingRef.current = true;
-          seekStartTimeRef.current = performance.now();
+          const now = performance.now();
+          if (lastLoopTimeRef.current !== null) {
+            const expectedDuration = (loopEndRef.current - loopStartRef.current) * 1000;
+            const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
+            setLoopGap(pureGap);
+          }
           v.currentTime = loopStartRef.current;
+          lastLoopTimeRef.current = performance.now();
         }
       }
       animId = requestAnimationFrame(checkLoop);
@@ -56,16 +60,6 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     animId = requestAnimationFrame(checkLoop);
     return () => cancelAnimationFrame(animId);
   }, []);
-
-  // シーク完了時の処理
-  const handleSeeked = () => {
-    if (seekStartTimeRef.current !== null) {
-      const gap = Math.round(performance.now() - seekStartTimeRef.current);
-      setLoopGap(gap);
-      seekStartTimeRef.current = null;
-    }
-    isSeekingRef.current = false;
-  };
 
   // 動画読み込み完了時の処理
   const handleLoadedMetadata = () => {
@@ -96,19 +90,28 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     setPlaybackRate(rate);
   };
 
-  // シークバー操作中（表示だけ更新）
+  // シークバーに触れた時
+  const handlePointerDown = () => {
+    setDragging(true);
+  };
+
+  // シークバーを動かしている最中（UIだけ更新）
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentTime(parseFloat(e.target.value));
   };
 
-  // シークバー操作完了時（指を離した瞬間に確実に動画を更新）
+  // シークバーから指を離した時
   const handlePointerUp = (e: React.SyntheticEvent<HTMLInputElement>) => {
-    setDragging(false);
     const newTime = parseFloat((e.currentTarget as HTMLInputElement).value);
     const v = videoRef.current;
-    // 動画の準備ができている場合のみ時間を更新する
-    if (v && v.readyState >= 1) {
+    if (v) {
       v.currentTime = newTime;
+      // Safariの非同期シーク（移動遅延）を待つため、150ms遅延してロックを解除する
+      setTimeout(() => {
+        setDragging(false);
+      }, 150);
+    } else {
+      setDragging(false);
     }
   };
 
@@ -122,17 +125,21 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
         videoRef.current.currentTime + 3,
         videoRef.current.duration || 3
       );
+      lastLoopTimeRef.current = performance.now();
     }
   };
 
   return (
     <div className="max-w-md mx-auto p-4 bg-white rounded-xl shadow-md space-y-4 border border-gray-200">
+      {/* 
+        preload="auto" を追加し、再生前でもSafariが動画のシーク位置を認識できるように修正 
+      */}
       <video
         ref={videoRef}
         src={src}
         playsInline
+        preload="auto"
         onLoadedMetadata={handleLoadedMetadata}
-        onSeeked={handleSeeked}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full rounded-lg bg-black aspect-video object-contain"
@@ -146,8 +153,8 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           max={duration || 100}
           step={0.01}
           value={currentTime}
-          onPointerDown={() => setDragging(true)}
-          onTouchStart={() => setDragging(true)}
+          onPointerDown={handlePointerDown}
+          onTouchStart={handlePointerDown}
           onInput={handleInput}
           onPointerUp={handlePointerUp}
           onTouchEnd={handlePointerUp}
@@ -205,7 +212,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           </b>
         </div>
         <div>
-          loop gap (v1.2):{" "}
+          loop gap (v1.3):{" "}
           <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
         </div>
       </div>
