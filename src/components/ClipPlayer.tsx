@@ -1,198 +1,187 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-type Props = {
+interface ClipPlayerProps {
   src: string;
-};
+}
 
-const SPEEDS = [0.5, 0.6, 0.75, 0.85, 1.0];
-
-export default function ClipPlayer({ src }: Props) {
+export default function ClipPlayer({ src }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const rangeRef = useRef<{ start: number; end: number } | null>(null);
-  const armedRef = useRef(true);
-  const loopStartTsRef = useRef<number | null>(null);
-
+  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [current, setCurrent] = useState(0);
-  const [speed, setSpeed] = useState(0.6);
-  const [loopOn, setLoopOn] = useState(false);
-  const [range, setRange] = useState({ start: 0, end: 0 });
-  const [gapMs, setGapMs] = useState<number | null>(null);
-  const [seekable, setSeekable] = useState<boolean | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1.0);
+  const [isLooping, setIsLooping] = useState(false);
+  const [loopGap, setLoopGap] = useState<number | null>(null);
+  const [seekableOk, setSeekableOk] = useState(false);
 
-  const onLoadedMetadata = useCallback(() => {
+  const loopStartRef = useRef(0);
+  const loopEndRef = useRef(3); // 3秒ループ
+  const isLoopingRef = useRef(isLooping);
+  const lastLoopTimeRef = useRef<number | null>(null);
+
+  isLoopingRef.current = isLooping;
+
+  // 再生時間の監視 & 高精度ループ判定 (rAF)
+  useEffect(() => {
+    let animId: number;
+
+    const checkLoop = () => {
+      const v = videoRef.current;
+      if (v) {
+        setCurrentTime(v.currentTime);
+
+        // ループ判定
+        if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
+          const now = performance.now();
+          if (lastLoopTimeRef.current !== null) {
+            const gap = now - lastLoopTimeRef.current;
+            setLoopGap(Math.round(gap));
+          }
+          v.currentTime = loopStartRef.current;
+          lastLoopTimeRef.current = performance.now();
+        }
+      }
+      animId = requestAnimationFrame(checkLoop);
+    };
+
+    animId = requestAnimationFrame(checkLoop);
+    return () => cancelAnimationFrame(animId);
+  }, []);
+
+  // 動画読み込み完了時の処理
+  const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
     setDuration(v.duration);
-    setRange({ start: 0, end: Math.min(5, v.duration) });
-    setSeekable(v.seekable.length > 0 && v.seekable.end(0) > 0);
+    setSeekableOk(v.seekable.length > 0);
+  };
 
-    v.playsInline = true;
-    // @ts-expect-error prefix
-    v.webkitPreservesPitch = true;
-    v.preservesPitch = true;
-    v.playbackRate = speed;
-  }, [speed]);
-
-  useEffect(() => {
-    rangeRef.current = loopOn ? range : null;
-  }, [loopOn, range]);
-
-  useEffect(() => {
+  // 再生/一時停止
+  const togglePlay = () => {
     const v = videoRef.current;
-    if (!v || typeof v.requestVideoFrameCallback !== "function") return;
+    if (!v) return;
+    if (isPlaying) {
+      v.pause();
+      setIsPlaying(false);
+    } else {
+      v.play();
+      setIsPlaying(true);
+    }
+  };
 
-    let handle = 0;
-    const tick = () => {
-      const r = rangeRef.current;
-      setCurrent(v.currentTime);
-
-      if (r && armedRef.current && v.currentTime >= r.end - 0.02) {
-        armedRef.current = false;
-        loopStartTsRef.current = performance.now();
-        v.currentTime = r.start;
-        v.addEventListener(
-          "seeked",
-          () => {
-            if (loopStartTsRef.current !== null) {
-              setGapMs(
-                Math.round(performance.now() - loopStartTsRef.current),
-              );
-              loopStartTsRef.current = null;
-            }
-            armedRef.current = true;
-          },
-          { once: true },
-        );
-      }
-      handle = v.requestVideoFrameCallback(tick);
-    };
-
-    handle = v.requestVideoFrameCallback(tick);
-    return () => v.cancelVideoFrameCallback(handle);
-  }, []);
-
-  useEffect(() => {
+  // 速度変更
+  const changeSpeed = (rate: number) => {
     const v = videoRef.current;
-    if (v) v.playbackRate = speed;
-  }, [speed]);
+    if (!v) return;
+    v.playbackRate = rate;
+    setPlaybackRate(rate);
+  };
 
-  const seekTo = (t: number) => {
-    const v = videoRef.current;
-    if (v) v.currentTime = Math.max(0, Math.min(t, duration));
+  // シークバー手動操作 (スワイプ/ドラッグ対応)
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime;
+    }
+  };
+
+  // ループ切り替え
+  const toggleLoop = () => {
+    const newLoop = !isLooping;
+    setIsLooping(newLoop);
+    if (newLoop && videoRef.current) {
+      loopStartRef.current = videoRef.current.currentTime;
+      loopEndRef.current = Math.min(
+        videoRef.current.currentTime + 3,
+        videoRef.current.duration || 3
+      );
+      lastLoopTimeRef.current = performance.now();
+    }
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto space-y-3 p-4">
+    <div className="max-w-md mx-auto p-4 bg-white rounded-xl shadow-md space-y-4 border border-gray-200">
       <video
         ref={videoRef}
         src={src}
-        controls
         playsInline
-        preload="metadata"
-        onLoadedMetadata={onLoadedMetadata}
-        className="w-full rounded-lg bg-black aspect-video"
+        onLoadedMetadata={handleLoadedMetadata}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        className="w-full rounded-lg bg-black aspect-video object-contain"
       />
 
+      {/* シークバー */}
       <div className="space-y-1">
         <input
           type="range"
           min={0}
-          max={duration || 1}
+          max={duration || 100}
           step={0.01}
-          value={current}
-          onChange={(e) => seekTo(Number(e.target.value))}
-          className="w-full"
+          value={currentTime}
+          onChange={handleSeek}
+          onInput={handleSeek}
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
         />
-        <div className="flex justify-between text-xs text-gray-500 tabular-nums">
-          <span>{current.toFixed(2)}s</span>
+        <div className="flex justify-between text-xs text-gray-500 font-mono">
+          <span>{currentTime.toFixed(2)}s</span>
           <span>{duration.toFixed(2)}s</span>
         </div>
       </div>
 
-      <div className="flex gap-2">
-        {SPEEDS.map((s) => (
-          <button
-            key={s}
-            onClick={() => setSpeed(s)}
-            className={
-              "flex-1 py-3 rounded-lg text-sm font-semibold " +
-              (speed === s
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-gray-700")
-            }
-          >
-            {s}x
-          </button>
-        ))}
+      {/* コントロールボタン */}
+      <div className="flex items-center justify-between gap-2">
+        <button
+          onClick={togglePlay}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm"
+        >
+          {isPlaying ? "PAUSE" : "PLAY"}
+        </button>
+
+        <div className="flex gap-1">
+          {[0.6, 1.0, 1.2].map((rate) => (
+            <button
+              key={rate}
+              onClick={() => changeSpeed(rate)}
+              className={`px-2 py-1 rounded text-xs font-bold ${
+                playbackRate === rate
+                  ? "bg-gray-800 text-white"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {rate}x
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={toggleLoop}
+          className={`px-3 py-2 rounded-lg font-bold text-xs ${
+            isLooping
+              ? "bg-green-600 text-white"
+              : "bg-gray-200 text-gray-700"
+          }`}
+        >
+          {isLooping ? "LOOP ON" : "LOOP OFF"}
+        </button>
       </div>
 
-      <div className="rounded-lg border p-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setLoopOn((v) => !v)}
-            className={
-              "flex-1 py-4 rounded-lg font-bold " +
-              (loopOn ? "bg-green-600 text-white" : "bg-gray-200 text-gray-800")
-            }
-          >
-            {loopOn ? "⟲ LOOP ON" : "⟲ LOOP OFF"}
-          </button>
-          <button
-            onClick={() => setRange({ start: current, end: current + 3 })}
-            className="px-4 py-4 rounded-lg bg-gray-100 text-sm font-medium"
-          >
-            ここから3秒
-          </button>
+      {/* デバッグ情報 */}
+      <div className="p-3 bg-gray-50 rounded-lg text-xs space-y-1 font-mono text-gray-700">
+        <div>
+          seekable (Range対応):{" "}
+          <b className={seekableOk ? "text-green-600" : "text-red-600"}>
+            {seekableOk ? "OK" : "NG"}
+          </b>
         </div>
-        <div className="flex gap-2 text-sm">
-          <label className="flex-1">
-            start
-            <input
-              type="number"
-              step={0.1}
-              value={range.start.toFixed(1)}
-              onChange={(e) =>
-                setRange((r) => ({ ...r, start: Number(e.target.value) }))
-              }
-              className="w-full border rounded px-2 py-1"
-            />
-          </label>
-          <label className="flex-1">
-            end
-            <input
-              type="number"
-              step={0.1}
-              value={range.end.toFixed(1)}
-              onChange={(e) =>
-                setRange((r) => ({ ...r, end: Number(e.target.value) }))
-              }
-              className="w-full border rounded px-2 py-1"
-            />
-          </label>
+        <div>
+          loop gap:{" "}
+          <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
         </div>
       </div>
-
-      <dl className="text-xs bg-gray-50 rounded-lg p-3 space-y-1 tabular-nums">
-        <div className="flex justify-between">
-          <dt>duration</dt>
-          <dd>{duration.toFixed(2)} s</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt>seekable (Range対応)</dt>
-          <dd className={seekable ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
-            {seekable === null ? "-" : seekable ? "OK" : "NG"}
-          </dd>
-        </div>
-        <div className="flex justify-between">
-          <dt>loop gap</dt>
-          <dd className={gapMs === null ? "" : gapMs < 80 ? "text-green-600 font-bold" : "text-orange-600 font-bold"}>
-            {gapMs === null ? "-" : `${gapMs} ms`}
-          </dd>
-        </div>
-      </dl>
     </div>
   );
 }
