@@ -23,6 +23,17 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
   isLoopingRef.current = isLooping;
 
+  // iOS Safari 高速シーク処理 (fastSeek)
+  const seekTo = (time: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    if ("fastSeek" in v && typeof (v as unknown as { fastSeek: (t: number) => void }).fastSeek === "function") {
+      (v as unknown as { fastSeek: (t: number) => void }).fastSeek(time);
+    } else {
+      v.currentTime = time;
+    }
+  };
+
   // 再生時間の監視 & 高精度ループ判定 (rAF)
   useEffect(() => {
     let animId: number;
@@ -40,7 +51,8 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
             const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
             setLoopGap(pureGap);
           }
-          v.currentTime = loopStartRef.current;
+          
+          seekTo(loopStartRef.current);
           lastLoopTimeRef.current = performance.now();
         }
       }
@@ -67,7 +79,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
       v.pause();
       setIsPlaying(false);
     } else {
-      v.play();
+      void v.play();
       setIsPlaying(true);
     }
   };
@@ -80,13 +92,11 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     setPlaybackRate(rate);
   };
 
-  // シークバー手動操作 (スワイプ/ドラッグ対応)
+  // シークバー手動操作
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
     setCurrentTime(newTime);
-    if (videoRef.current) {
-      videoRef.current.currentTime = newTime;
-    }
+    seekTo(newTime);
   };
 
   // ループ切り替え
