@@ -51,6 +51,8 @@ src/
     clips/
       [id]/
         page.tsx
+    history/
+      page.tsx
     verify/
       page.tsx
     videos/
@@ -100,6 +102,112 @@ tsconfig.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="src/app/history/page.tsx">
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+
+interface Attempt {
+  id: string;
+  clip_id: string;
+  input_raw: string;
+  answer_gold: string;
+  created_at: string;
+  clips?: {
+    label: string;
+  };
+}
+
+export default function HistoryPage() {
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function fetchAttempts() {
+      setLoading(true);
+      const { data } = await supabase
+        .from('attempts')
+        .select('*, clips(label)')
+        .eq('is_correct', false)
+        .order('created_at', { ascending: false });
+
+      if (data) setAttempts(data);
+      setLoading(false);
+    }
+
+    fetchAttempts();
+  }, []);
+
+  const handlePrintPdf = () => {
+    window.print();
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-8 print:bg-white print:py-0">
+      <div className="max-w-3xl mx-auto px-4 space-y-6">
+        
+        <div className="flex items-center justify-between border-b pb-4 print:hidden">
+          <h1 className="text-xl font-bold text-gray-900">📝 間違いノート・学習履歴</h1>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePrintPdf}
+              className="px-4 py-2 bg-green-600 text-white font-bold text-xs rounded-lg hover:bg-green-700 shadow-sm"
+            >
+              📄 PDF一覧をダウンロード
+            </button>
+            <Link href="/" className="px-3 py-2 bg-gray-200 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-300">
+              ← ダッシュボード
+            </Link>
+          </div>
+        </div>
+
+        {/* 印刷/PDF専用ヘッダー */}
+        <div className="hidden print:block border-b pb-2 mb-4">
+          <h1 className="text-2xl font-bold text-black">Dictation App - 間違いデータ分析レポート</h1>
+          <p className="text-xs text-gray-500">出力日時: {new Date().toLocaleString()}</p>
+        </div>
+
+        {loading ? (
+          <p className="text-xs text-gray-500 text-center py-8">履歴を読み込み中...</p>
+        ) : attempts.length === 0 ? (
+          <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+            間違えた問題の記録はありません！素晴らしいです。
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {attempts.map((att) => (
+              <div key={att.id} className="p-4 bg-white border rounded-xl shadow-sm space-y-2 print:border-gray-300 print:shadow-none">
+                <div className="flex justify-between items-center text-xs text-gray-400 font-mono border-b pb-1">
+                  <span>📅 {new Date(att.created_at).toLocaleString()}</span>
+                  <Link href={`/clips/${att.clip_id}`} className="text-blue-600 font-bold hover:underline print:hidden">
+                    {att.clips?.label || 'クリップを開く'} ➔
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-sm font-mono pt-1">
+                  <div className="bg-red-50 p-2 rounded border border-red-100">
+                    <span className="text-[10px] text-red-500 block font-bold">あなたの回答:</span>
+                    <span className="font-bold text-red-800">{att.input_raw || '（未入力）'}</span>
+                  </div>
+                  <div className="bg-green-50 p-2 rounded border border-green-100">
+                    <span className="text-[10px] text-green-600 block font-bold">正解:</span>
+                    <span className="font-bold text-green-800">{att.answer_gold}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+    </main>
+  );
+}
+</file>
 
 <file path="repomix実行.bat">
 @echo off
@@ -564,6 +672,7 @@ interface Segment {
   start_ms: number;
   end_ms: number;
   text: string;
+  corrected_text?: string;
 }
 
 interface Props {
@@ -578,7 +687,6 @@ export default function TranscriptView({ videoId }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // 認証状態管理
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -586,26 +694,23 @@ export default function TranscriptView({ videoId }: Props) {
 
   const supabase = createClient();
 
-  // 1. ログイン状態の確認
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSignedIn(!!data.session);
     });
   }, [supabase]);
 
-  // 2. 文字起こしデータ (segments) の読み込み（ログイン済みの場合のみ）
   useEffect(() => {
     async function fetchSegments() {
       if (!signedIn || !videoId) return;
       setLoading(true);
       const { data, error } = await supabase
         .from("segments")
-        .select("id, idx, start_ms, end_ms, text")
+        .select("*")
         .eq("video_id", videoId)
         .order("idx", { ascending: true });
 
       if (error) {
-        console.error("error fetching segments:", error);
         setMessage(`🚨 データ取得エラー: ${error.message}`);
       } else if (data) {
         setSegments(data);
@@ -616,22 +721,14 @@ export default function TranscriptView({ videoId }: Props) {
     void fetchSegments();
   }, [videoId, signedIn, supabase]);
 
-  // サインイン処理
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
-      setAuthError(error.message);
-    } else {
-      setSignedIn(true);
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    else setSignedIn(true);
   };
 
-  // 範囲選択ロジック
   const handleSelectSegment = (seg: Segment) => {
     setMessage(null);
     if (!selectedStart || (selectedStart && selectedEnd)) {
@@ -647,7 +744,25 @@ export default function TranscriptView({ videoId }: Props) {
     }
   };
 
-  // クリップ作成リクエスト
+  // 全文章のコピペ
+  const handleCopyAll = () => {
+    const fullText = segments.map((s) => s.corrected_text || s.text).join("\n");
+    void navigator.clipboard.writeText(fullText);
+    setMessage("📋 文字起こしの全文をクリップボードにコピーしました！");
+  };
+
+  // 選択範囲のコピペ
+  const handleCopySelected = () => {
+    if (!selectedStart) return;
+    const startIdx = selectedStart.idx;
+    const endIdx = selectedEnd ? selectedEnd.idx : selectedStart.idx;
+    const selectedSegs = segments.filter((s) => s.idx >= startIdx && s.idx <= endIdx);
+    const selectedText = selectedSegs.map((s) => s.corrected_text || s.text).join("\n");
+
+    void navigator.clipboard.writeText(selectedText);
+    setMessage("📋 選択範囲の文章をクリップボードにコピーしました！");
+  };
+
   const handleCreateClip = async () => {
     if (!selectedStart) return;
 
@@ -658,9 +773,7 @@ export default function TranscriptView({ videoId }: Props) {
     setMessage(null);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("ログインしていません。");
 
       const { data: clip, error: clipErr } = await supabase
@@ -680,24 +793,17 @@ export default function TranscriptView({ videoId }: Props) {
 
       if (clipErr) throw clipErr;
 
-      const { error: jobErr } = await supabase.from("ingest_jobs").insert({
+      await supabase.from("ingest_jobs").insert({
         owner_id: user.id,
         video_id: videoId,
         clip_id: clip.id,
         type: "clip_encode",
         lane: "gpu",
         priority: 10,
-        payload: {
-          video_id: videoId,
-          clip_id: clip.id,
-          start_ms: startSeg.start_ms,
-          end_ms: endSeg.end_ms,
-        },
+        payload: { video_id: videoId, clip_id: clip.id, start_ms: startSeg.start_ms, end_ms: endSeg.end_ms },
       });
 
-      if (jobErr) throw jobErr;
-
-      setMessage("🎉 クリップ切り出しジョブを送信しました！次回PC起動時に作成されます。");
+      setMessage("🎉 クリップ切り出しジョブを送信しました！");
       setSelectedStart(null);
       setSelectedEnd(null);
     } catch (err: any) {
@@ -707,32 +813,13 @@ export default function TranscriptView({ videoId }: Props) {
     }
   };
 
-  // ログイン未完了時：ログインフォームを表示
   if (signedIn === false) {
     return (
       <form onSubmit={handleSignIn} className="max-w-sm mx-auto p-6 space-y-4 bg-white border rounded-xl shadow-sm">
         <h2 className="text-lg font-bold text-center">サインインが必要です</h2>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="メールアドレス"
-          autoComplete="username"
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          required
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="パスワード"
-          autoComplete="current-password"
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          required
-        />
-        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">
-          サインイン
-        </button>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">サインイン</button>
         {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
       </form>
     );
@@ -752,69 +839,43 @@ export default function TranscriptView({ videoId }: Props) {
     <div className="space-y-4 max-w-xl mx-auto p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Transcript (文字起こし)</h2>
-        <span className="text-xs text-gray-500">
-          {selectedStart
-            ? selectedEnd
-              ? `選択中: ${selectedStart.idx + 1} 〜 ${selectedEnd.idx + 1} 行目`
-              : `開始行: ${selectedStart.idx + 1} 行目`
-            : "範囲を選択してください"}
-        </span>
+        <button onClick={handleCopyAll} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200">
+          📋 全文コピー
+        </button>
       </div>
 
       {selectedStart && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
-          <div className="text-xs text-blue-800 font-mono">
-            長さ:{" "}
-            {(
-              ((selectedEnd?.end_ms || selectedStart.end_ms) -
-                selectedStart.start_ms) /
-              1000
-            ).toFixed(1)}
-            秒
-          </div>
-          <button
-            onClick={handleCreateClip}
-            disabled={isSubmitting}
-            className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
-          >
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between gap-2">
+          <button onClick={handleCopySelected} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-100">
+            📋 選択文をコピー
+          </button>
+          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md text-sm hover:bg-blue-700 disabled:opacity-50">
             {isSubmitting ? "送信中..." : "この区間でクリップ作成"}
           </button>
         </div>
       )}
 
-      {message && (
-        <div className="p-3 bg-gray-100 rounded-lg text-xs font-mono">{message}</div>
-      )}
+      {message && <div className="p-3 bg-gray-100 rounded-lg text-xs font-mono">{message}</div>}
 
       <div className="space-y-2 border rounded-lg p-2 bg-white max-h-[60vh] overflow-y-auto">
-        {segments.length === 0 ? (
-          <div className="p-4 text-center text-gray-400 text-sm">
-            文字起こしデータがありません。
-          </div>
-        ) : (
-          segments.map((seg) => {
-            const active = isSelected(seg);
-            return (
-              <div
-                key={seg.id}
-                onClick={() => handleSelectSegment(seg)}
-                className={`p-3 rounded-lg border cursor-pointer transition-colors text-sm ${
-                  active
-                    ? "bg-blue-100 border-blue-500 font-medium"
-                    : "hover:bg-gray-50 border-gray-200"
-                }`}
-              >
-                <div className="flex justify-between text-[10px] text-gray-400 font-mono mb-1">
-                  <span>#{(seg.idx + 1).toString().padStart(2, "0")}</span>
-                  <span>
-                    {(seg.start_ms / 1000).toFixed(1)}s - {(seg.end_ms / 1000).toFixed(1)}s
-                  </span>
-                </div>
-                <p className="text-gray-800 leading-relaxed">{seg.text}</p>
+        {segments.map((seg) => {
+          const active = isSelected(seg);
+          return (
+            <div
+              key={seg.id}
+              onClick={() => handleSelectSegment(seg)}
+              className={`p-3 rounded-lg border cursor-pointer transition-colors text-sm ${
+                active ? "bg-blue-100 border-blue-500 font-medium" : "hover:bg-gray-50 border-gray-200"
+              }`}
+            >
+              <div className="flex justify-between text-[10px] text-gray-400 font-mono mb-1">
+                <span>#{(seg.idx + 1).toString().padStart(2, "0")}</span>
+                <span>{(seg.start_ms / 1000).toFixed(1)}s - {(seg.end_ms / 1000).toFixed(1)}s</span>
               </div>
-            );
-          })
-        )}
+              <p className="text-gray-800 leading-relaxed">{seg.corrected_text || seg.text}</p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -894,10 +955,6 @@ export function useSignedUrl(clipId: string | null, kind: "video" | "audio") {
 }
 </file>
 
-<file path="supabase/.temp/cli-latest">
-v2.115.0
-</file>
-
 <file path="supabase/.temp/gotrue-version">
 v2.195.0
 </file>
@@ -966,7 +1023,11 @@ const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .filter(Boolean);
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allow = origin && ALLOWED_ORIGINS.includes(origin) ? origin : "";
+  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
+  const allow = isWildcard
+    ? (origin ?? "*")
+    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
+
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers": "authorization, content-type",
@@ -1351,6 +1412,10 @@ if __name__ == "__main__":
 }
 </file>
 
+<file path="supabase/.temp/cli-latest">
+v2.116.0
+</file>
+
 <file path="next.config.ts">
 import type { NextConfig } from "next";
 
@@ -1408,6 +1473,7 @@ import { createClient } from "@/lib/supabase/client";
 
 interface Video {
   id: string;
+  youtube_id: string;
   title: string | null;
   status: string;
   created_at: string;
@@ -1420,6 +1486,10 @@ interface Clip {
   status: string;
   video_id: string;
   created_at: string;
+  videos?: {
+    youtube_id: string;
+    title: string;
+  };
 }
 
 export default function DashboardPage() {
@@ -1427,6 +1497,9 @@ export default function DashboardPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"clips" | "videos">("clips");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1437,7 +1510,6 @@ export default function DashboardPage() {
   const [totalStorageBytes, setTotalStorageBytes] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // 編集用モーダル状態
   const [editingClip, setEditingClip] = useState<Clip | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editTags, setEditTags] = useState("");
@@ -1456,14 +1528,14 @@ export default function DashboardPage() {
 
     const { data: vData } = await supabase
       .from("videos")
-      .select("id, title, status, created_at")
+      .select("id, youtube_id, title, status, created_at")
       .order("created_at", { ascending: false });
 
     if (vData) setVideos(vData);
 
     const { data: cData } = await supabase
       .from("clips")
-      .select("id, label, tags, status, video_id, created_at")
+      .select("*, videos(youtube_id, title)")
       .order("created_at", { ascending: false });
 
     if (cData) setClips(cData);
@@ -1487,10 +1559,7 @@ export default function DashboardPage() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setAuthError(error.message);
     else setSignedIn(true);
   };
@@ -1551,19 +1620,18 @@ export default function DashboardPage() {
   };
 
   const handleDeleteClip = async (clipId: string) => {
-    if (!confirm("このクリップを削除しますか？（クラウドストレージ容量が解放されます）")) return;
-
+    if (!confirm("このクリップを削除しますか？")) return;
     await supabase.from("clips").delete().eq("id", clipId);
     void fetchData();
   };
 
   const handleSaveEdit = async () => {
     if (!editingClip) return;
-    const tagArray = editTags.split(",").map(t => t.trim()).filter(Boolean);
+    const tagArray = editTags.split(",").map((t) => t.trim()).filter(Boolean);
 
     await supabase.from("clips").update({
       label: editLabel,
-      tags: tagArray
+      tags: tagArray,
     }).eq("id", editingClip.id);
 
     setEditingClip(null);
@@ -1584,24 +1652,39 @@ export default function DashboardPage() {
 
   const storageMb = (totalStorageBytes / (1024 * 1024)).toFixed(1);
 
+  // 検索フィルタリング
+  const filteredClips = clips.filter((c) => {
+    const q = searchQuery.toLowerCase();
+    const labelMatch = (c.label || "").toLowerCase().includes(q);
+    const tagMatch = (c.tags || []).some((t) => t.toLowerCase().includes(q));
+    return labelMatch || tagMatch;
+  });
+
+  const filteredVideos = videos.filter((v) =>
+    (v.title || "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <main className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-3xl mx-auto px-4 space-y-8">
+      <div className="max-w-3xl mx-auto px-4 space-y-6">
         
+        {/* ヘッダー領域 */}
         <div className="flex justify-between items-center border-b pb-4">
-          <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
-          
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
+            <Link href="/history" className="inline-block mt-1 text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
+              📝 間違いノート・履歴を開く ➔
+            </Link>
+          </div>
           <div className="text-right">
             <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
-            <div className="text-sm font-mono font-bold text-blue-600">
-              {storageMb} MB / 10 GB
-            </div>
+            <div className="text-sm font-mono font-bold text-blue-600">{storageMb} MB / 10 GB</div>
           </div>
         </div>
 
-        {/* 1. 新規動画追加 */}
+        {/* 1. YouTube追加フォーム */}
         <section className="bg-white p-5 border rounded-xl shadow-sm space-y-3">
-          <h2 className="text-base font-bold text-gray-800">新規YouTube動画を追加</h2>
+          <h2 className="text-sm font-bold text-gray-800">新規YouTube動画を追加</h2>
           <form onSubmit={handleAddVideo} className="flex gap-2">
             <input
               type="text"
@@ -1618,106 +1701,158 @@ export default function DashboardPage() {
           {submitMessage && <p className="text-xs font-mono text-gray-700 bg-gray-100 p-2 rounded">{submitMessage}</p>}
         </section>
 
-        {/* 2. 作成済みクリップ (穴埋めドリル) */}
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-gray-800">作成済みクリップ (穴埋めドリル)</h2>
-          {loading ? (
-            <p className="text-xs text-gray-500">読み込み中...</p>
-          ) : clips.length === 0 ? (
-            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
-              クリップがありません。下の動画一覧から作成してください。
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {clips.map((clip) => (
-                <div key={clip.id} className="p-4 bg-white border rounded-xl shadow-sm space-y-3">
-                  <div className="flex justify-between items-start">
-                    <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600">
-                      {clip.label || "無題のクリップ"}
+        {/* 2. 検索バー & タブ切り替え */}
+        <div className="space-y-3">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="🔍 題名やタグで検索..."
+            className="w-full border bg-white rounded-xl px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-500"
+          />
+
+          <div className="flex border-b">
+            <button
+              onClick={() => setActiveTab("clips")}
+              className={`flex-1 py-3 font-bold text-sm text-center border-b-2 transition-colors ${
+                activeTab === "clips" ? "border-blue-600 text-blue-600 bg-white" : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              ✂️ 作成済みクリップ ({filteredClips.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("videos")}
+              className={`flex-1 py-3 font-bold text-sm text-center border-b-2 transition-colors ${
+                activeTab === "videos" ? "border-blue-600 text-blue-600 bg-white" : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              📹 登録済み動画 ({filteredVideos.length})
+            </button>
+          </div>
+        </div>
+
+        {/* 3. クリップ一覧タブ */}
+        {activeTab === "clips" && (
+          <section>
+            {loading ? (
+              <p className="text-xs text-gray-500 text-center py-8">読み込み中...</p>
+            ) : filteredClips.length === 0 ? (
+              <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+                該当するクリップが見つかりません。
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {filteredClips.map((clip) => {
+                  const ytId = clip.videos?.youtube_id;
+                  const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
+
+                  return (
+                    <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
+                      {thumbUrl && (
+                        <div className="aspect-video bg-black relative">
+                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+
+                      <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-start">
+                            <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600 line-clamp-1">
+                              {clip.label || "無題のクリップ"}
+                            </Link>
+                            <div className="flex gap-1 shrink-0">
+                              <button
+                                onClick={() => {
+                                  setEditingClip(clip);
+                                  setEditLabel(clip.label || "");
+                                  setEditTags((clip.tags || []).join(", "));
+                                }}
+                                className="text-xs text-gray-500 hover:bg-gray-100 px-1.5 py-0.5 rounded"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClip(clip.id)}
+                                className="text-xs text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+
+                          {clip.tags && clip.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {clip.tags.map((t, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => setSearchQuery(t)}
+                                  className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono hover:bg-blue-50 hover:text-blue-600"
+                                >
+                                  #{t}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <Link
+                          href={`/clips/${clip.id}`}
+                          className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
+                        >
+                          学習をスタート ➔
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* 4. 動画一覧タブ */}
+        {activeTab === "videos" && (
+          <section>
+            {loading ? (
+              <p className="text-xs text-gray-500 text-center py-8">読み込み中...</p>
+            ) : filteredVideos.length === 0 ? (
+              <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+                該当する動画が見つかりません。
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {filteredVideos.map((video) => {
+                  const thumbUrl = video.youtube_id ? `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg` : null;
+
+                  return (
+                    <Link
+                      key={video.id}
+                      href={`/videos/${video.id}`}
+                      className="bg-white border rounded-xl overflow-hidden shadow-sm hover:border-blue-500 transition-colors flex flex-col justify-between"
+                    >
+                      {thumbUrl && (
+                        <div className="aspect-video bg-black">
+                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div className="p-3 space-y-1">
+                        <h3 className="text-sm font-bold text-gray-800 line-clamp-2">
+                          {video.title || "（タイトル取得中）"}
+                        </h3>
+                        <div className="flex justify-between items-center text-[10px] text-gray-400 font-mono">
+                          <span>{video.status}</span>
+                          <span className="text-blue-600 font-bold">文字起こしを見る ➔</span>
+                        </div>
+                      </div>
                     </Link>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          setEditingClip(clip);
-                          setEditLabel(clip.label || "");
-                          setEditTags((clip.tags || []).join(", "));
-                        }}
-                        className="text-xs text-gray-500 hover:bg-gray-100 px-1.5 py-0.5 rounded"
-                      >
-                        ✏️ 編集
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClip(clip.id)}
-                        className="text-xs text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"
-                      >
-                        🗑️ 削除
-                      </button>
-                    </div>
-                  </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
 
-                  {clip.tags && clip.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {clip.tags.map((t, idx) => (
-                        <span key={idx} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <Link
-                    href={`/clips/${clip.id}`}
-                    className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
-                  >
-                    学習をスタート ➔
-                  </Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 3. 登録済み動画一覧 (文字起こし・切り出し元) */}
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-gray-800">登録済み動画一覧 (文字起こし)</h2>
-          {loading ? (
-            <p className="text-xs text-gray-500">読み込み中...</p>
-          ) : videos.length === 0 ? (
-            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
-              登録された動画はありません。
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {videos.map((video) => (
-                <Link
-                  key={video.id}
-                  href={`/videos/${video.id}`}
-                  className="flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
-                >
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-800 mb-1">
-                      {video.title || "（タイトル取得中）"}
-                    </h3>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      ID: {video.id}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded font-mono ${
-                      video.status === "ready"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-yellow-100 text-yellow-700"
-                    }`}
-                  >
-                    {video.status}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 編集用モーダル */}
+        {/* 編集モーダル */}
         {editingClip && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl p-5 w-full max-w-sm space-y-4">
@@ -1772,7 +1907,6 @@ interface Segment {
   text: string;
   ja_text?: string;
   corrected_text?: string;
-  phonetic_info?: { word: string; type: string; label: string }[];
   skeletons?: { text: string; label: string }[];
 }
 
@@ -1796,9 +1930,12 @@ export default function ClipPage() {
 
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
-  const [showResult, setShowResult] = useState(false);
+  const [checkedSegments, setCheckedSegments] = useState<Record<string, boolean>>({});
 
-  const { url: signedUrl, loading: urlLoading } = useSignedUrl(id, 'video');
+  const [seekToTime, setSeekToTime] = useState<number | null>(null);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+
+  const { url: signedUrl } = useSignedUrl(id, 'video');
   const supabase = createClient();
 
   useEffect(() => {
@@ -1844,31 +1981,53 @@ export default function ClipPage() {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleCheckAnswers = () => {
-    const newResults: Record<string, { isCorrect: boolean; score: number; answer: string }> = {};
+  // 単一セグメント（文章）ごとの採点 & DB保存
+  const checkSingleSegment = async (segId: string) => {
+    const seg = segments.find((s) => s.id === segId);
+    if (!seg) return;
 
-    segments.forEach((seg) => {
-      const words = (seg.corrected_text || seg.text).split(' ');
-      const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+    const words = (seg.corrected_text || seg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+    const newResults = { ...results };
 
-      words.forEach((word, wIdx) => {
-        const key = `${seg.id}-${wIdx}`;
-        const item = segItems.find((it) => it.word_from === wIdx);
+    const { data: { user } } = await supabase.auth.getUser();
 
-        const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
-        const userInput = (userAnswers[key] || '').trim().toLowerCase();
-        const gold = targetAnswer.trim().toLowerCase();
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const word = words[wIdx];
+      const key = `${seg.id}-${wIdx}`;
+      const item = segItems.find((it) => it.word_from === wIdx);
 
-        if (userInput === gold) {
-          newResults[key] = { isCorrect: true, score: 1.0, answer: targetAnswer };
-        } else {
-          newResults[key] = { isCorrect: false, score: 0.0, answer: targetAnswer };
-        }
-      });
-    });
+      const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+      const userInput = (userAnswers[key] || '').trim().toLowerCase();
+      const gold = targetAnswer.trim().toLowerCase();
+      const isCorrect = userInput === gold;
+
+      newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+
+      // DBに試行履歴/間違いデータを非同期保存
+      if (user) {
+        await supabase.from('attempts').insert({
+          owner_id: user.id,
+          clip_id: id,
+          segment_id: seg.id,
+          item_id: item?.id || null,
+          input_raw: userAnswers[key] || '',
+          answer_gold: targetAnswer,
+          score: isCorrect ? 1.0 : 0.0,
+          is_correct: isCorrect,
+        });
+      }
+    }
 
     setResults(newResults);
-    setShowResult(true);
+    setCheckedSegments((prev) => ({ ...prev, [segId]: true }));
+  };
+
+  // クリップ全体一括チェック
+  const handleCheckAllAnswers = async () => {
+    for (const seg of segments) {
+      await checkSingleSegment(seg.id);
+    }
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
@@ -1887,10 +2046,14 @@ export default function ClipPage() {
         </div>
 
         {signedUrl ? (
-          <ClipPlayer src={signedUrl} />
+          <ClipPlayer
+            src={signedUrl}
+            seekToTime={seekToTime}
+            onTimeUpdate={(t) => setCurrentVideoTime(t)}
+          />
         ) : (
           <div className="p-8 bg-amber-50 border border-amber-200 rounded-xl text-center text-xs text-amber-800">
-            動画準備中またはワーカー処理中...
+            動画準備中...
           </div>
         )}
 
@@ -1903,11 +2066,30 @@ export default function ClipPage() {
             {segments.map((seg) => {
               const words = (seg.corrected_text || seg.text).split(' ');
               const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+              
+              // 現在再生中の文かどうか判定
+              const startSec = (seg.start_ms || 0) / 1000;
+              const endSec = (seg.end_ms || 0) / 1000;
+              const isActive = currentVideoTime >= startSec && currentVideoTime <= endSec;
+              const isChecked = checkedSegments[seg.id];
 
               return (
-                <div key={seg.id} className="p-4 border rounded-xl bg-gray-50 space-y-3">
-                  <div className="text-xs text-gray-400 font-mono">
-                    #{(seg.idx + 1).toString().padStart(2, '0')} ({((seg.start_ms || 0) / 1000).toFixed(1)}s - {((seg.end_ms || 0) / 1000).toFixed(1)}s)
+                <div
+                  key={seg.id}
+                  className={`p-4 border rounded-xl transition-all space-y-3 ${
+                    isActive ? 'border-blue-500 bg-blue-50/40 ring-2 ring-blue-200 shadow-md' : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  <div className="flex justify-between items-center text-xs text-gray-400 font-mono">
+                    <span className={isActive ? 'font-bold text-blue-600' : ''}>
+                      #{ (seg.idx + 1).toString().padStart(2, '0') } ({startSec.toFixed(1)}s - {endSec.toFixed(1)}s)
+                    </span>
+                    <button
+                      onClick={() => setSeekToTime(startSec)}
+                      className="px-2 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] hover:bg-blue-200 transition-colors"
+                    >
+                      ▶️ ここから再生
+                    </button>
                   </div>
 
                   <div className="flex flex-wrap gap-2 items-center font-mono">
@@ -1915,10 +2097,6 @@ export default function ClipPage() {
                       const key = `${seg.id}-${wIdx}`;
                       const item = segItems.find((it) => it.word_from === wIdx);
                       const res = results[key];
-
-                      const phonetic = (seg.phonetic_info || []).find(
-                        (p) => p.word.toLowerCase() === word.replace(/[^a-zA-Z]/g, '').toLowerCase()
-                      );
 
                       const isTarget = segItems.length > 0 ? !!item : true;
 
@@ -1931,16 +2109,9 @@ export default function ClipPage() {
                               onChange={(e) => handleInputChange(key, e.target.value)}
                               placeholder="---"
                               className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
-                                phonetic ? 'border-red-500 bg-red-50 text-red-900' : 'border-blue-500 bg-white text-gray-900'
-                              } ${
-                                res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : ''
+                                res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
                               }`}
                             />
-                            {phonetic && (
-                              <span className="text-[9px] text-red-600 font-bold mt-0.5">
-                                {phonetic.label}
-                              </span>
-                            )}
                             {res && (
                               <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                                 {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
@@ -1951,15 +2122,26 @@ export default function ClipPage() {
                       }
 
                       return (
-                        <span key={wIdx} className={`text-sm font-bold ${phonetic ? 'text-red-600 underline' : 'text-gray-800'}`}>
+                        <span key={wIdx} className="text-sm font-bold text-gray-800">
                           {word}
                         </span>
                       );
                     })}
                   </div>
 
-                  {seg.skeletons && seg.skeletons.length > 0 && (
-                    <div className="mt-2 space-y-1">
+                  {/* この文章単体の回答チェックボタン */}
+                  <div className="flex justify-end pt-2 border-t border-gray-200/60">
+                    <button
+                      onClick={() => checkSingleSegment(seg.id)}
+                      className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs font-bold hover:bg-gray-900"
+                    >
+                      この文章をチェック
+                    </button>
+                  </div>
+
+                  {/* チェック後にのみ表示される構文と日本語訳 */}
+                  {isChecked && seg.skeletons && seg.skeletons.length > 0 && (
+                    <div className="space-y-1 pt-1">
                       {seg.skeletons.map((sk, idx) => (
                         <div key={idx} className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded font-semibold">
                           💡 構文: <strong>{sk.text}</strong> ({sk.label})
@@ -1968,8 +2150,8 @@ export default function ClipPage() {
                     </div>
                   )}
 
-                  {seg.ja_text && showResult && (
-                    <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
+                  {isChecked && seg.ja_text && (
+                    <div className="text-xs text-gray-600 pt-1">
                       💡 <strong>訳:</strong> {seg.ja_text}
                     </div>
                   )}
@@ -1979,10 +2161,10 @@ export default function ClipPage() {
           </div>
 
           <button
-            onClick={handleCheckAnswers}
+            onClick={handleCheckAllAnswers}
             className="w-full py-3 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 shadow-md transition-colors"
           >
-            回答をチェックする
+            全体を一括チェックする
           </button>
         </div>
 
@@ -1999,9 +2181,11 @@ import { useEffect, useRef, useState } from "react";
 
 interface ClipPlayerProps {
   src: string;
+  seekToTime?: number | null;
+  onTimeUpdate?: (time: number) => void;
 }
 
-export default function ClipPlayer({ src }: ClipPlayerProps) {
+export default function ClipPlayer({ src, seekToTime, onTimeUpdate }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -2009,11 +2193,8 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [isLooping, setIsLooping] = useState(false);
   const [loopGap, setLoopGap] = useState<number | null>(null);
-  const [seekableOk, setSeekableOk] = useState(false);
 
-  // ドラッグ状態管理
   const isDraggingRef = useRef(false);
-  // 再生前の「予約シーク時間」
   const pendingSeekTimeRef = useRef<number | null>(null);
 
   const loopStartRef = useRef(0);
@@ -2023,7 +2204,14 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
   isLoopingRef.current = isLooping;
 
-  // 再生時間の監視 & ループ判定 (rAF)
+  useEffect(() => {
+    if (seekToTime !== undefined && seekToTime !== null && videoRef.current) {
+      videoRef.current.currentTime = seekToTime;
+      void videoRef.current.play();
+      setIsPlaying(true);
+    }
+  }, [seekToTime]);
+
   useEffect(() => {
     let animId: number;
     const checkLoop = () => {
@@ -2031,13 +2219,12 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
       if (v && !isDraggingRef.current) {
         if (pendingSeekTimeRef.current === null) {
           setCurrentTime(v.currentTime);
+          if (onTimeUpdate) onTimeUpdate(v.currentTime);
         }
 
-        // ループ判定
         if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
           const now = performance.now();
           if (lastLoopTimeRef.current !== null) {
-            // 【修正箇所】再生速度(playbackRate)を考慮して、本来かかるべき時間を正確に計算
             const expectedDuration = ((loopEndRef.current - loopStartRef.current) * 1000) / v.playbackRate;
             const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
             setLoopGap(pureGap);
@@ -2050,22 +2237,12 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     };
     animId = requestAnimationFrame(checkLoop);
     return () => cancelAnimationFrame(animId);
-  }, []);
+  }, [onTimeUpdate]);
 
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
     setDuration(v.duration);
-    setSeekableOk(v.seekable.length > 0);
-  };
-
-  const handlePlayEvent = () => {
-    setIsPlaying(true);
-    const v = videoRef.current;
-    if (v && pendingSeekTimeRef.current !== null) {
-      v.currentTime = pendingSeekTimeRef.current;
-      pendingSeekTimeRef.current = null;
-    }
   };
 
   const togglePlay = () => {
@@ -2086,10 +2263,6 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     setPlaybackRate(rate);
   };
 
-  const handlePointerDown = () => {
-    isDraggingRef.current = true;
-  };
-
   const handleSeekInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentTime(parseFloat(e.target.value));
   };
@@ -2098,12 +2271,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     const newTime = parseFloat((e.currentTarget as HTMLInputElement).value);
     const v = videoRef.current;
     if (v) {
-      if (v.readyState <= 1 && !isPlaying) {
-        pendingSeekTimeRef.current = newTime;
-        setCurrentTime(newTime);
-      } else {
-        v.currentTime = newTime;
-      }
+      v.currentTime = newTime;
     }
     setTimeout(() => {
       isDraggingRef.current = false;
@@ -2115,10 +2283,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
     setIsLooping(newLoop);
     if (newLoop && videoRef.current) {
       loopStartRef.current = videoRef.current.currentTime;
-      loopEndRef.current = Math.min(
-        videoRef.current.currentTime + 3,
-        videoRef.current.duration || 3
-      );
+      loopEndRef.current = Math.min(videoRef.current.currentTime + 3, videoRef.current.duration || 3);
       lastLoopTimeRef.current = performance.now();
     }
   };
@@ -2131,12 +2296,11 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
         playsInline
         preload="auto"
         onLoadedMetadata={handleLoadedMetadata}
-        onPlay={handlePlayEvent}
+        onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full rounded-lg bg-black aspect-video object-contain"
       />
 
-      {/* シークバー */}
       <div className="space-y-1">
         <input
           type="range"
@@ -2144,11 +2308,9 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           max={duration || 100}
           step={0.01}
           value={currentTime}
-          onPointerDown={handlePointerDown}
-          onTouchStart={handlePointerDown}
+          onPointerDown={() => { isDraggingRef.current = true; }}
           onChange={handleSeekInput}
           onPointerUp={handleSeekEnd}
-          onTouchEnd={handleSeekEnd}
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
         />
         <div className="flex justify-between text-xs text-gray-500 font-mono">
@@ -2158,10 +2320,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <button
-          onClick={togglePlay}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm"
-        >
+        <button onClick={togglePlay} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700">
           {isPlaying ? "PAUSE" : "PLAY"}
         </button>
 
@@ -2170,41 +2329,16 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
             <button
               key={rate}
               onClick={() => changeSpeed(rate)}
-              className={`px-2 py-1 rounded text-xs font-bold ${
-                playbackRate === rate
-                  ? "bg-gray-800 text-white"
-                  : "bg-gray-100 text-gray-700"
-              }`}
+              className={`px-2 py-1 rounded text-xs font-bold ${playbackRate === rate ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-700"}`}
             >
               {rate}x
             </button>
           ))}
         </div>
 
-        <button
-          onClick={toggleLoop}
-          className={`px-3 py-2 rounded-lg font-bold text-xs ${
-            isLooping
-              ? "bg-green-600 text-white"
-              : "bg-gray-200 text-gray-700"
-          }`}
-        >
+        <button onClick={toggleLoop} className={`px-3 py-2 rounded-lg font-bold text-xs ${isLooping ? "bg-green-600 text-white" : "bg-gray-200 text-gray-700"}`}>
           {isLooping ? "LOOP ON" : "LOOP OFF"}
         </button>
-      </div>
-
-      {/* デバッグ情報 */}
-      <div className="p-3 bg-gray-50 rounded-lg text-xs space-y-1 font-mono text-gray-700">
-        <div>
-          seekable (Range対応):{" "}
-          <b className={seekableOk ? "text-green-600" : "text-red-600"}>
-            {seekableOk ? "OK" : "NG"}
-          </b>
-        </div>
-        <div>
-          loop gap:{" "}
-          <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
-        </div>
       </div>
     </div>
   );

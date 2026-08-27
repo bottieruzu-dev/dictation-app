@@ -18,7 +18,11 @@ const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .filter(Boolean);
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allow = origin && ALLOWED_ORIGINS.includes(origin) ? origin : "";
+  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
+  const allow = isWildcard
+    ? (origin ?? "*")
+    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
+
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Headers": "authorization, content-type",

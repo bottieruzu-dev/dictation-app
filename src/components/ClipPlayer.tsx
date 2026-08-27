@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 interface ClipPlayerProps {
   src: string;
   seekToTime?: number | null;
+  onTimeUpdate?: (time: number) => void;
 }
 
-export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
+export default function ClipPlayer({ src, seekToTime, onTimeUpdate }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -15,7 +16,6 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [isLooping, setIsLooping] = useState(false);
   const [loopGap, setLoopGap] = useState<number | null>(null);
-  const [seekableOk, setSeekableOk] = useState(false);
 
   const isDraggingRef = useRef(false);
   const pendingSeekTimeRef = useRef<number | null>(null);
@@ -27,7 +27,6 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
 
   isLoopingRef.current = isLooping;
 
-  // 外部からのジャンプ再生指示
   useEffect(() => {
     if (seekToTime !== undefined && seekToTime !== null && videoRef.current) {
       videoRef.current.currentTime = seekToTime;
@@ -43,6 +42,7 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
       if (v && !isDraggingRef.current) {
         if (pendingSeekTimeRef.current === null) {
           setCurrentTime(v.currentTime);
+          if (onTimeUpdate) onTimeUpdate(v.currentTime);
         }
 
         if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
@@ -60,22 +60,12 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
     };
     animId = requestAnimationFrame(checkLoop);
     return () => cancelAnimationFrame(animId);
-  }, []);
+  }, [onTimeUpdate]);
 
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
     if (!v) return;
     setDuration(v.duration);
-    setSeekableOk(v.seekable.length > 0);
-  };
-
-  const handlePlayEvent = () => {
-    setIsPlaying(true);
-    const v = videoRef.current;
-    if (v && pendingSeekTimeRef.current !== null) {
-      v.currentTime = pendingSeekTimeRef.current;
-      pendingSeekTimeRef.current = null;
-    }
   };
 
   const togglePlay = () => {
@@ -96,10 +86,6 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
     setPlaybackRate(rate);
   };
 
-  const handlePointerDown = () => {
-    isDraggingRef.current = true;
-  };
-
   const handleSeekInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentTime(parseFloat(e.target.value));
   };
@@ -108,12 +94,7 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
     const newTime = parseFloat((e.currentTarget as HTMLInputElement).value);
     const v = videoRef.current;
     if (v) {
-      if (v.readyState <= 1 && !isPlaying) {
-        pendingSeekTimeRef.current = newTime;
-        setCurrentTime(newTime);
-      } else {
-        v.currentTime = newTime;
-      }
+      v.currentTime = newTime;
     }
     setTimeout(() => {
       isDraggingRef.current = false;
@@ -125,10 +106,7 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
     setIsLooping(newLoop);
     if (newLoop && videoRef.current) {
       loopStartRef.current = videoRef.current.currentTime;
-      loopEndRef.current = Math.min(
-        videoRef.current.currentTime + 3,
-        videoRef.current.duration || 3
-      );
+      loopEndRef.current = Math.min(videoRef.current.currentTime + 3, videoRef.current.duration || 3);
       lastLoopTimeRef.current = performance.now();
     }
   };
@@ -141,7 +119,7 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
         playsInline
         preload="auto"
         onLoadedMetadata={handleLoadedMetadata}
-        onPlay={handlePlayEvent}
+        onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full rounded-lg bg-black aspect-video object-contain"
       />
@@ -153,11 +131,9 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
           max={duration || 100}
           step={0.01}
           value={currentTime}
-          onPointerDown={handlePointerDown}
-          onTouchStart={handlePointerDown}
+          onPointerDown={() => { isDraggingRef.current = true; }}
           onChange={handleSeekInput}
           onPointerUp={handleSeekEnd}
-          onTouchEnd={handleSeekEnd}
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
         />
         <div className="flex justify-between text-xs text-gray-500 font-mono">
@@ -167,10 +143,7 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <button
-          onClick={togglePlay}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700"
-        >
+        <button onClick={togglePlay} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700">
           {isPlaying ? "PAUSE" : "PLAY"}
         </button>
 
@@ -179,39 +152,16 @@ export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
             <button
               key={rate}
               onClick={() => changeSpeed(rate)}
-              className={`px-2 py-1 rounded text-xs font-bold ${
-                playbackRate === rate
-                  ? "bg-gray-800 text-white"
-                  : "bg-gray-100 text-gray-700"
-              }`}
+              className={`px-2 py-1 rounded text-xs font-bold ${playbackRate === rate ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-700"}`}
             >
               {rate}x
             </button>
           ))}
         </div>
 
-        <button
-          onClick={toggleLoop}
-          className={`px-3 py-2 rounded-lg font-bold text-xs ${
-            isLooping
-              ? "bg-green-600 text-white"
-              : "bg-gray-200 text-gray-700"
-          }`}
-        >
+        <button onClick={toggleLoop} className={`px-3 py-2 rounded-lg font-bold text-xs ${isLooping ? "bg-green-600 text-white" : "bg-gray-200 text-gray-700"}`}>
           {isLooping ? "LOOP ON" : "LOOP OFF"}
         </button>
-      </div>
-
-      <div className="p-3 bg-gray-50 rounded-lg text-xs space-y-1 font-mono text-gray-700">
-        <div>
-          seekable:{" "}
-          <b className={seekableOk ? "text-green-600" : "text-red-600"}>
-            {seekableOk ? "OK" : "NG"}
-          </b>
-        </div>
-        <div>
-          loop gap: <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
-        </div>
       </div>
     </div>
   );

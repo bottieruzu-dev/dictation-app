@@ -38,10 +38,10 @@ export default function ClipPage() {
 
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
-  const [showResult, setShowResult] = useState(false);
+  const [checkedSegments, setCheckedSegments] = useState<Record<string, boolean>>({});
 
-  // ジャンプ再生用の時間状態
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
 
   const { url: signedUrl } = useSignedUrl(id, 'video');
   const supabase = createClient();
@@ -89,35 +89,53 @@ export default function ClipPage() {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleCheckAnswers = () => {
-    const newResults: Record<string, { isCorrect: boolean; score: number; answer: string }> = {};
+  // 単一セグメント（文章）ごとの採点 & DB保存
+  const checkSingleSegment = async (segId: string) => {
+    const seg = segments.find((s) => s.id === segId);
+    if (!seg) return;
 
-    segments.forEach((seg) => {
-      const words = (seg.corrected_text || seg.text).split(' ');
-      const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+    const words = (seg.corrected_text || seg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+    const newResults = { ...results };
 
-      words.forEach((word, wIdx) => {
-        const key = `${seg.id}-${wIdx}`;
-        const item = segItems.find((it) => it.word_from === wIdx);
+    const { data: { user } } = await supabase.auth.getUser();
 
-        const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
-        const userInput = (userAnswers[key] || '').trim().toLowerCase();
-        const gold = targetAnswer.trim().toLowerCase();
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const word = words[wIdx];
+      const key = `${seg.id}-${wIdx}`;
+      const item = segItems.find((it) => it.word_from === wIdx);
 
-        if (userInput === gold) {
-          newResults[key] = { isCorrect: true, score: 1.0, answer: targetAnswer };
-        } else {
-          newResults[key] = { isCorrect: false, score: 0.0, answer: targetAnswer };
-        }
-      });
-    });
+      const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+      const userInput = (userAnswers[key] || '').trim().toLowerCase();
+      const gold = targetAnswer.trim().toLowerCase();
+      const isCorrect = userInput === gold;
+
+      newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+
+      // DBに試行履歴/間違いデータを非同期保存
+      if (user) {
+        await supabase.from('attempts').insert({
+          owner_id: user.id,
+          clip_id: id,
+          segment_id: seg.id,
+          item_id: item?.id || null,
+          input_raw: userAnswers[key] || '',
+          answer_gold: targetAnswer,
+          score: isCorrect ? 1.0 : 0.0,
+          is_correct: isCorrect,
+        });
+      }
+    }
 
     setResults(newResults);
-    setShowResult(true);
+    setCheckedSegments((prev) => ({ ...prev, [segId]: true }));
   };
 
-  const handlePlaySegment = (startMs: number) => {
-    setSeekToTime(startMs / 1000);
+  // クリップ全体一括チェック
+  const handleCheckAllAnswers = async () => {
+    for (const seg of segments) {
+      await checkSingleSegment(seg.id);
+    }
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
@@ -136,10 +154,14 @@ export default function ClipPage() {
         </div>
 
         {signedUrl ? (
-          <ClipPlayer src={signedUrl} seekToTime={seekToTime} />
+          <ClipPlayer
+            src={signedUrl}
+            seekToTime={seekToTime}
+            onTimeUpdate={(t) => setCurrentVideoTime(t)}
+          />
         ) : (
           <div className="p-8 bg-amber-50 border border-amber-200 rounded-xl text-center text-xs text-amber-800">
-            動画準備中またはワーカー処理中...
+            動画準備中...
           </div>
         )}
 
@@ -152,16 +174,29 @@ export default function ClipPage() {
             {segments.map((seg) => {
               const words = (seg.corrected_text || seg.text).split(' ');
               const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+              
+              // 現在再生中の文かどうか判定
+              const startSec = (seg.start_ms || 0) / 1000;
+              const endSec = (seg.end_ms || 0) / 1000;
+              const isActive = currentVideoTime >= startSec && currentVideoTime <= endSec;
+              const isChecked = checkedSegments[seg.id];
 
               return (
-                <div key={seg.id} className="p-4 border rounded-xl bg-gray-50 space-y-3">
+                <div
+                  key={seg.id}
+                  className={`p-4 border rounded-xl transition-all space-y-3 ${
+                    isActive ? 'border-blue-500 bg-blue-50/40 ring-2 ring-blue-200 shadow-md' : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
                   <div className="flex justify-between items-center text-xs text-gray-400 font-mono">
-                    <span>#{(seg.idx + 1).toString().padStart(2, '0')} ({((seg.start_ms || 0) / 1000).toFixed(1)}s - {((seg.end_ms || 0) / 1000).toFixed(1)}s)</span>
+                    <span className={isActive ? 'font-bold text-blue-600' : ''}>
+                      #{ (seg.idx + 1).toString().padStart(2, '0') } ({startSec.toFixed(1)}s - {endSec.toFixed(1)}s)
+                    </span>
                     <button
-                      onClick={() => handlePlaySegment(seg.start_ms)}
-                      className="px-2 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] hover:bg-blue-200 transition-colors flex items-center gap-1"
+                      onClick={() => setSeekToTime(startSec)}
+                      className="px-2 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] hover:bg-blue-200 transition-colors"
                     >
-                      ▶️ この文から再生
+                      ▶️ ここから再生
                     </button>
                   </div>
 
@@ -202,9 +237,19 @@ export default function ClipPage() {
                     })}
                   </div>
 
-                  {/* 回答チェック後にのみ表示 */}
-                  {showResult && seg.skeletons && seg.skeletons.length > 0 && (
-                    <div className="mt-2 space-y-1 pt-2 border-t border-gray-200">
+                  {/* この文章単体の回答チェックボタン */}
+                  <div className="flex justify-end pt-2 border-t border-gray-200/60">
+                    <button
+                      onClick={() => checkSingleSegment(seg.id)}
+                      className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs font-bold hover:bg-gray-900"
+                    >
+                      この文章をチェック
+                    </button>
+                  </div>
+
+                  {/* チェック後にのみ表示される構文と日本語訳 */}
+                  {isChecked && seg.skeletons && seg.skeletons.length > 0 && (
+                    <div className="space-y-1 pt-1">
                       {seg.skeletons.map((sk, idx) => (
                         <div key={idx} className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded font-semibold">
                           💡 構文: <strong>{sk.text}</strong> ({sk.label})
@@ -213,8 +258,8 @@ export default function ClipPage() {
                     </div>
                   )}
 
-                  {showResult && seg.ja_text && (
-                    <div className="mt-1 text-xs text-gray-600">
+                  {isChecked && seg.ja_text && (
+                    <div className="text-xs text-gray-600 pt-1">
                       💡 <strong>訳:</strong> {seg.ja_text}
                     </div>
                   )}
@@ -224,10 +269,10 @@ export default function ClipPage() {
           </div>
 
           <button
-            onClick={handleCheckAnswers}
+            onClick={handleCheckAllAnswers}
             className="w-full py-3 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 shadow-md transition-colors"
           >
-            回答をチェックする
+            全体を一括チェックする
           </button>
         </div>
 

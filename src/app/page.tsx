@@ -201,8 +201,14 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-3xl mx-auto px-4 space-y-6">
         
+        {/* ヘッダー領域 */}
         <div className="flex justify-between items-center border-b pb-4">
-          <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
+            <Link href="/history" className="inline-block mt-1 text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
+              📝 間違いノート・履歴を開く ➔
+            </Link>
+          </div>
           <div className="text-right">
             <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
             <div className="text-sm font-mono font-bold text-blue-600">{storageMb} MB / 10 GB</div>
