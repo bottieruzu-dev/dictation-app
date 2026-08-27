@@ -40,8 +40,8 @@ export default function ClipPage() {
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
   const [showResult, setShowResult] = useState(false);
 
-  // R2 署名付き URL（R2に動画がある場合）
-  const { url: signedUrl } = useSignedUrl(id, 'video');
+  // R2 署名付き URL
+  const { url: signedUrl, loading: urlLoading } = useSignedUrl(id, 'video');
 
   const supabase = createClient();
 
@@ -51,7 +51,6 @@ export default function ClipPage() {
     async function fetchData() {
       setLoading(true);
 
-      // 1. クリップ情報の取得
       const { data: clipData } = await supabase
         .from('clips')
         .select('*, videos(youtube_id, title)')
@@ -61,7 +60,6 @@ export default function ClipPage() {
       if (clipData) {
         setClip(clipData);
 
-        // 2. セグメント（字幕）の取得
         const { data: segData } = await supabase
           .from('segments')
           .select('*')
@@ -72,7 +70,6 @@ export default function ClipPage() {
 
         if (segData) setSegments(segData);
 
-        // 3. 穴埋め問題データ (cloze_items) の取得
         const { data: itemData } = await supabase
           .from('cloze_items')
           .select('*')
@@ -91,7 +88,6 @@ export default function ClipPage() {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
   };
 
-  // 回答チェック処理
   const handleCheckAnswers = () => {
     const newResults: Record<string, { isCorrect: boolean; score: number; answer: string }> = {};
 
@@ -103,7 +99,6 @@ export default function ClipPage() {
         const key = `${seg.id}-${wIdx}`;
         const item = segItems.find((it) => it.word_from === wIdx);
 
-        // ターゲットとなる正解単語 (cloze_items が無ければ単語自体を対象に)
         const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
         const userInput = (userAnswers[key] || '').trim().toLowerCase();
         const gold = targetAnswer.trim().toLowerCase();
@@ -135,7 +130,6 @@ export default function ClipPage() {
     <main className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-xl mx-auto px-4 space-y-6">
         
-        {/* ヘッダー & 戻るボタン */}
         <div className="flex items-center justify-between border-b pb-3">
           <h1 className="text-lg font-bold text-gray-900">
             {clip.label || clip.videos?.title || 'ディクテーション穴埋め'}
@@ -145,21 +139,27 @@ export default function ClipPage() {
           </Link>
         </div>
 
-        {/* 1. プレイヤー（R2署名URLがあればClipPlayer、なければYouTube） */}
+        {/* 1. プレイヤー領域 */}
         {signedUrl ? (
+          /* R2に動画準備完了 ➔ 独自ClipPlayerを起動 */
           <ClipPlayer src={signedUrl} />
-        ) : clip.videos?.youtube_id ? (
-          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-md">
-            <iframe
-              src={`https://www.youtube.com/embed/${clip.videos.youtube_id.replace(/[^a-zA-Z0-9_-]/g, '')}?start=${Math.floor((clip.start_ms || 0) / 1000)}&end=${Math.floor((clip.end_ms || 0) / 1000)}&autoplay=0`}
-              className="absolute top-0 left-0 w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
+        ) : urlLoading ? (
+          <div className="p-8 bg-white border rounded-xl text-center text-gray-500 text-sm">
+            動画プレイヤーを準備中...
           </div>
-        ) : null}
+        ) : (
+          /* ワーカー未処理の場合の表示 */
+          <div className="p-8 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-2">
+            <p className="text-sm font-bold text-amber-800">
+              ⏳ 動画の切り出し処理中です
+            </p>
+            <p className="text-xs text-amber-700">
+              PCで <code className="bg-amber-100 px-1 py-0.5 rounded">run_worker.bat</code> を起動して処理が完了すると、専用プレイヤー（ループ機能付き）で再生できるようになります。
+            </p>
+          </div>
+        )}
 
-        {/* 2. 単語単位の穴埋めドリルカード */}
+        {/* 2. 穴埋めドリルカード */}
         <div className="bg-white border rounded-xl p-5 space-y-5 shadow-sm">
           <h2 className="text-base font-bold text-gray-800 border-b pb-2">
             ディクテーション穴埋め問題
@@ -176,14 +176,12 @@ export default function ClipPage() {
                     #{(seg.idx + 1).toString().padStart(2, '0')} ({((seg.start_ms || 0) / 1000).toFixed(1)}s - {((seg.end_ms || 0) / 1000).toFixed(1)}s)
                   </div>
 
-                  {/* 単語分解 & 穴埋めインプット表示 */}
                   <div className="flex flex-wrap gap-2 items-center font-mono">
                     {words.map((word, wIdx) => {
                       const key = `${seg.id}-${wIdx}`;
                       const item = segItems.find((it) => it.word_from === wIdx);
                       const res = results[key];
 
-                      // cloze_itemsの指定があるか、無ければ全単語を対象
                       const isTarget = segItems.length > 0 ? !!item : true;
 
                       if (isTarget) {
@@ -202,7 +200,6 @@ export default function ClipPage() {
                                   : 'border-blue-500 bg-white text-gray-900'
                               }`}
                             />
-                            {/* 採点結果の表示 (○ 100% または × (正解単語)) */}
                             {res && (
                               <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                                 {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
@@ -220,7 +217,6 @@ export default function ClipPage() {
                     })}
                   </div>
 
-                  {/* 日本語訳の表示（回答後またはデータ存在時） */}
                   {seg.ja_text && showResult && (
                     <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
                       💡 <strong>訳:</strong> {seg.ja_text}
