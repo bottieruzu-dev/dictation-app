@@ -42,6 +42,7 @@ export default function ClipPage() {
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
   const [checkedSegments, setCheckedSegments] = useState<Record<string, boolean>>({});
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
@@ -106,26 +107,27 @@ export default function ClipPage() {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
   };
 
-  // 前の文章へ（動画も即座にジャンプ）
   const handlePrevSegment = () => {
     if (activeSegIndex > 0) {
       const newIdx = activeSegIndex - 1;
       setActiveSegIndex(newIdx);
       setSeekToTime(segments[newIdx].start_ms / 1000);
+      setSaveMessage(null);
     }
   };
 
-  // 次の文章へ（動画も即座にジャンプ）
   const handleNextSegment = () => {
     if (activeSegIndex < segments.length - 1) {
       const newIdx = activeSegIndex + 1;
       setActiveSegIndex(newIdx);
       setSeekToTime(segments[newIdx].start_ms / 1000);
+      setSaveMessage(null);
     }
   };
 
-  // 単一セグメント採点 & DB保存
+  // 単一セグメント採点
   const checkSingleSegment = async (segId: string) => {
+    setSaveMessage(null);
     const seg = segments.find((s) => s.id === segId);
     if (!seg) return;
 
@@ -133,7 +135,7 @@ export default function ClipPage() {
     const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
     const newResults = { ...results };
 
-    const { data: { user } } = await supabase.auth.getUser();
+    let wrongCount = 0;
 
     for (let wIdx = 0; wIdx < words.length; wIdx++) {
       const word = words[wIdx];
@@ -145,27 +147,63 @@ export default function ClipPage() {
       const gold = targetAnswer.trim().toLowerCase();
       const isCorrect = userInput === gold;
 
-      newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+      if (!isCorrect) wrongCount++;
 
-      if (user) {
+      newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+    }
+
+    setResults(newResults);
+    setCheckedSegments((prev) => ({ ...prev, [segId]: true }));
+
+    // 間違いがあれば自動保存を実行
+    if (wrongCount > 0) {
+      await saveMistakesToDb(segId, newResults);
+    }
+  };
+
+  // 間違いをDBに保存する処理
+  const saveMistakesToDb = async (segId: string, currentResults = results) => {
+    const seg = segments.find((s) => s.id === segId);
+    if (!seg) return;
+
+    const words = (seg.corrected_text || seg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setSaveMessage('🚨 ログインが必要です');
+      return;
+    }
+
+    let savedCount = 0;
+
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const key = `${seg.id}-${wIdx}`;
+      const res = currentResults[key];
+
+      if (res && !res.isCorrect) {
+        const item = segItems.find((it) => it.word_from === wIdx);
         await supabase.from('attempts').insert({
           owner_id: user.id,
           clip_id: id,
           segment_id: seg.id,
           item_id: item?.id || null,
           input_raw: userAnswers[key] || '',
-          answer_gold: targetAnswer,
-          score: isCorrect ? 1.0 : 0.0,
-          is_correct: isCorrect,
+          answer_gold: res.answer,
+          score: 0.0,
+          is_correct: false,
         });
+        savedCount++;
       }
     }
 
-    setResults(newResults);
-    setCheckedSegments((prev) => ({ ...prev, [segId]: true }));
+    if (savedCount > 0) {
+      setSaveMessage(`💾 ${savedCount} 件の間違いをノートに保存しました！`);
+    } else {
+      setSaveMessage('🎉 全問正解です！保存する間違いはありません。');
+    }
   };
 
-  // 全体一括チェック
   const handleCheckAllAnswers = async () => {
     for (const seg of segments) {
       await checkSingleSegment(seg.id);
@@ -202,7 +240,7 @@ export default function ClipPage() {
           </div>
         )}
 
-        {/* 2. 動画直下：フォーカス学習カード (再生位置連動 & 前後切り替え) */}
+        {/* 2. フォーカス学習カード */}
         {currentSeg && (
           <div className="bg-white border-2 border-blue-500 rounded-2xl p-5 shadow-lg space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
@@ -262,33 +300,51 @@ export default function ClipPage() {
               })}
             </div>
 
-            {/* コントロール（前後ボタン & 回答チェック） */}
+            {/* 保存メッセージ */}
+            {saveMessage && (
+              <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-800 text-xs font-bold rounded-lg text-center">
+                {saveMessage}
+              </div>
+            )}
+
+            {/* コントロール（前後ボタン & 回答チェック & 保存） */}
             <div className="flex items-center justify-between gap-2 pt-3 border-t">
               <button
                 disabled={activeSegIndex === 0}
                 onClick={handlePrevSegment}
-                className="px-3.5 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 ⬅️ 前の文
               </button>
 
-              <button
-                onClick={() => checkSingleSegment(currentSeg.id)}
-                className="px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
-              >
-                この文章をチェック
-              </button>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => checkSingleSegment(currentSeg.id)}
+                  className="px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
+                >
+                  この文章をチェック
+                </button>
+
+                {checkedSegments[currentSeg.id] && (
+                  <button
+                    onClick={() => saveMistakesToDb(currentSeg.id)}
+                    className="px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm"
+                  >
+                    💾 間違いを保存
+                  </button>
+                )}
+              </div>
 
               <button
                 disabled={activeSegIndex === segments.length - 1}
                 onClick={handleNextSegment}
-                className="px-3.5 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 次の文 ➡️
               </button>
             </div>
 
-            {/* 解説・日本語訳 (回答チェック後に表示) */}
+            {/* 解説・日本語訳 */}
             {checkedSegments[currentSeg.id] && (
               <div className="space-y-2 pt-3 border-t border-dashed">
                 {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
@@ -310,7 +366,7 @@ export default function ClipPage() {
           </div>
         )}
 
-        {/* 3. 下部：全体一括チェック & 全文章クイック選択一覧 */}
+        {/* 3. 全文章リスト */}
         <div className="bg-white border rounded-xl p-5 space-y-4 shadow-sm">
           <div className="flex justify-between items-center border-b pb-2">
             <h2 className="text-sm font-bold text-gray-800">全文章リスト ({segments.length}文)</h2>
@@ -331,6 +387,7 @@ export default function ClipPage() {
                   onClick={() => {
                     setActiveSegIndex(idx);
                     setSeekToTime(seg.start_ms / 1000);
+                    setSaveMessage(null);
                   }}
                   className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-colors flex justify-between items-center ${
                     isCurrent ? 'bg-blue-50 border-blue-500 font-bold text-blue-900' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
