@@ -15,6 +15,8 @@ interface Segment {
   text: string;
   ja_text?: string;
   corrected_text?: string;
+  phonetic_info?: { word: string; type: string; label: string }[];
+  skeletons?: { text: string; label: string }[];
 }
 
 interface ClozeItem {
@@ -35,14 +37,11 @@ export default function ClipPage() {
   const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 回答状態管理
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
   const [showResult, setShowResult] = useState(false);
 
-  // R2 署名付き URL
   const { url: signedUrl, loading: urlLoading } = useSignedUrl(id, 'video');
-
   const supabase = createClient();
 
   useEffect(() => {
@@ -117,49 +116,27 @@ export default function ClipPage() {
 
   if (loading) return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
 
-  if (!clip) return (
-    <div className="max-w-xl mx-auto p-6 space-y-4">
-      <p className="text-gray-700 font-bold">クリップが見つかりませんでした。</p>
-      <Link href="/" className="inline-block px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold">
-        ← ダッシュボードに戻る
-      </Link>
-    </div>
-  );
-
   return (
     <main className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-xl mx-auto px-4 space-y-6">
         
         <div className="flex items-center justify-between border-b pb-3">
           <h1 className="text-lg font-bold text-gray-900">
-            {clip.label || clip.videos?.title || 'ディクテーション穴埋め'}
+            {clip?.label || 'ディクテーション穴埋め'}
           </h1>
           <Link href="/" className="text-sm text-blue-600 hover:underline font-bold">
             ← ダッシュボードに戻る
           </Link>
         </div>
 
-        {/* 1. プレイヤー領域 */}
         {signedUrl ? (
-          /* R2に動画準備完了 ➔ 独自ClipPlayerを起動 */
           <ClipPlayer src={signedUrl} />
-        ) : urlLoading ? (
-          <div className="p-8 bg-white border rounded-xl text-center text-gray-500 text-sm">
-            動画プレイヤーを準備中...
-          </div>
         ) : (
-          /* ワーカー未処理の場合の表示 */
-          <div className="p-8 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-2">
-            <p className="text-sm font-bold text-amber-800">
-              ⏳ 動画の切り出し処理中です
-            </p>
-            <p className="text-xs text-amber-700">
-              PCで <code className="bg-amber-100 px-1 py-0.5 rounded">run_worker.bat</code> を起動して処理が完了すると、専用プレイヤー（ループ機能付き）で再生できるようになります。
-            </p>
+          <div className="p-8 bg-amber-50 border border-amber-200 rounded-xl text-center text-xs text-amber-800">
+            動画準備中またはワーカー処理中...
           </div>
         )}
 
-        {/* 2. 穴埋めドリルカード */}
         <div className="bg-white border rounded-xl p-5 space-y-5 shadow-sm">
           <h2 className="text-base font-bold text-gray-800 border-b pb-2">
             ディクテーション穴埋め問題
@@ -182,6 +159,11 @@ export default function ClipPage() {
                       const item = segItems.find((it) => it.word_from === wIdx);
                       const res = results[key];
 
+                      // 音声変化があるか確認
+                      const phonetic = (seg.phonetic_info || []).find(
+                        (p) => p.word.toLowerCase() === word.replace(/[^a-zA-Z]/g, '').toLowerCase()
+                      );
+
                       const isTarget = segItems.length > 0 ? !!item : true;
 
                       if (isTarget) {
@@ -193,13 +175,16 @@ export default function ClipPage() {
                               onChange={(e) => handleInputChange(key, e.target.value)}
                               placeholder="---"
                               className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
-                                res
-                                  ? res.isCorrect
-                                    ? 'border-green-500 bg-green-50 text-green-800'
-                                    : 'border-red-500 bg-red-50 text-red-800'
-                                  : 'border-blue-500 bg-white text-gray-900'
+                                phonetic ? 'border-red-500 bg-red-50 text-red-900' : 'border-blue-500 bg-white text-gray-900'
+                              } ${
+                                res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : ''
                               }`}
                             />
+                            {phonetic && (
+                              <span className="text-[9px] text-red-600 font-bold mt-0.5">
+                                {phonetic.label}
+                              </span>
+                            )}
                             {res && (
                               <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                                 {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
@@ -210,12 +195,23 @@ export default function ClipPage() {
                       }
 
                       return (
-                        <span key={wIdx} className="text-sm font-bold text-gray-800 self-center">
+                        <span key={wIdx} className={`text-sm font-bold ${phonetic ? 'text-red-600 underline' : 'text-gray-800'}`}>
                           {word}
                         </span>
                       );
                     })}
                   </div>
+
+                  {/* 構文骨組み（フレーズ）表示 */}
+                  {seg.skeletons && seg.skeletons.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {seg.skeletons.map((sk, idx) => (
+                        <div key={idx} className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded font-semibold">
+                          💡 構文: <strong>{sk.text}</strong> ({sk.label})
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {seg.ja_text && showResult && (
                     <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">

@@ -101,250 +101,132 @@ tsconfig.json
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/app/clips/[id]/page.tsx">
-'use client';
+<file path="repomix実行.bat">
+@echo off
+cd /d "%~dp0"
+npx repomix
+pause
+</file>
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
-import { useSignedUrl } from '@/lib/useSignedUrl';
-import ClipPlayer from '@/components/ClipPlayer';
+<file path="public/file.svg">
+<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
+</file>
 
-interface Segment {
-  id: string;
-  idx: number;
-  start_ms: number;
-  end_ms: number;
-  text: string;
-  ja_text?: string;
-  corrected_text?: string;
-}
+<file path="public/globe.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
+</file>
 
-interface ClozeItem {
-  id: string;
-  segment_id: string;
-  word_from: number;
-  word_to: number;
-  answer: string;
-  variants: string[];
-}
+<file path="public/next.svg">
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
+</file>
 
-export default function ClipPage() {
-  const params = useParams();
-  const id = params?.id as string;
+<file path="public/vercel.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+</file>
 
-  const [clip, setClip] = useState<any>(null);
-  const [segments, setSegments] = useState<Segment[]>([]);
-  const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
-  const [loading, setLoading] = useState(true);
+<file path="public/window.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
 
-  // 回答状態管理
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
-  const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
-  const [showResult, setShowResult] = useState(false);
+<file path="src/app/verify/page.tsx">
+"use client";
 
-  // R2 署名付き URL（R2に動画がある場合）
-  const { url: signedUrl } = useSignedUrl(id, 'video');
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { useSignedUrl } from "@/lib/useSignedUrl";
+import ClipPlayer from "@/components/ClipPlayer";
+
+function VerifyInner() {
+  const params = useSearchParams();
+  const clipId = params.get("clip");
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const supabase = createClient();
-
-  useEffect(() => {
-    if (!id) return;
-
-    async function fetchData() {
-      setLoading(true);
-
-      // 1. クリップ情報の取得
-      const { data: clipData } = await supabase
-        .from('clips')
-        .select('*, videos(youtube_id, title)')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (clipData) {
-        setClip(clipData);
-
-        // 2. セグメント（字幕）の取得
-        const { data: segData } = await supabase
-          .from('segments')
-          .select('*')
-          .eq('video_id', clipData.video_id)
-          .gte('idx', clipData.seg_from ?? 0)
-          .lte('idx', clipData.seg_to ?? 9999)
-          .order('idx', { ascending: true });
-
-        if (segData) setSegments(segData);
-
-        // 3. 穴埋め問題データ (cloze_items) の取得
-        const { data: itemData } = await supabase
-          .from('cloze_items')
-          .select('*')
-          .eq('clip_id', id);
-
-        if (itemData) setClozeItems(itemData);
-      }
-
-      setLoading(false);
-    }
-
-    fetchData();
-  }, [id]);
-
-  const handleInputChange = (key: string, value: string) => {
-    setUserAnswers((prev) => ({ ...prev, [key]: value }));
-  };
-
-  // 回答チェック処理
-  const handleCheckAnswers = () => {
-    const newResults: Record<string, { isCorrect: boolean; score: number; answer: string }> = {};
-
-    segments.forEach((seg) => {
-      const words = (seg.corrected_text || seg.text).split(' ');
-      const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
-
-      words.forEach((word, wIdx) => {
-        const key = `${seg.id}-${wIdx}`;
-        const item = segItems.find((it) => it.word_from === wIdx);
-
-        // ターゲットとなる正解単語 (cloze_items が無ければ単語自体を対象に)
-        const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
-        const userInput = (userAnswers[key] || '').trim().toLowerCase();
-        const gold = targetAnswer.trim().toLowerCase();
-
-        if (userInput === gold) {
-          newResults[key] = { isCorrect: true, score: 1.0, answer: targetAnswer };
-        } else {
-          newResults[key] = { isCorrect: false, score: 0.0, answer: targetAnswer };
-        }
-      });
-    });
-
-    setResults(newResults);
-    setShowResult(true);
-  };
-
-  if (loading) return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
-
-  if (!clip) return (
-    <div className="max-w-xl mx-auto p-6 space-y-4">
-      <p className="text-gray-700 font-bold">クリップが見つかりませんでした。</p>
-      <Link href="/" className="inline-block px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold">
-        ← ダッシュボードに戻る
-      </Link>
-    </div>
+  const { url, error, loading } = useSignedUrl(
+    signedIn ? clipId : null,
+    "video",
   );
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSignedIn(!!data.session);
+    });
+  }, [supabase]);
+
+  const signIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) setAuthError(error.message);
+    else setSignedIn(true);
+  };
+
+  if (signedIn === null) {
+    return <p className="p-8 text-center text-gray-500">loading...</p>;
+  }
+
+  if (!signedIn) {
+    return (
+      <form onSubmit={signIn} className="max-w-sm mx-auto p-8 space-y-3">
+        <h1 className="text-lg font-bold">Sign in</h1>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="email"
+          autoComplete="username"
+          className="w-full border rounded px-3 py-2"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="password"
+          autoComplete="current-password"
+          className="w-full border rounded px-3 py-2"
+        />
+        <button className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold">
+          Sign in
+        </button>
+        {authError && <p className="text-red-600 text-sm">{authError}</p>}
+      </form>
+    );
+  }
+
+  if (!clipId) {
+    return (
+      <p className="p-8 text-center text-gray-500">
+        URLパラメータに ?clip=&lt;uuid&gt; を指定してください
+      </p>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-xl mx-auto px-4 space-y-6">
-        
-        {/* ヘッダー & 戻るボタン */}
-        <div className="flex items-center justify-between border-b pb-3">
-          <h1 className="text-lg font-bold text-gray-900">
-            {clip.label || clip.videos?.title || 'ディクテーション穴埋め'}
-          </h1>
-          <Link href="/" className="text-sm text-blue-600 hover:underline font-bold">
-            ← ダッシュボードに戻る
-          </Link>
-        </div>
-
-        {/* 1. プレイヤー（R2署名URLがあればClipPlayer、なければYouTube） */}
-        {signedUrl ? (
-          <ClipPlayer src={signedUrl} />
-        ) : clip.videos?.youtube_id ? (
-          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-md">
-            <iframe
-              src={`https://www.youtube.com/embed/${clip.videos.youtube_id.replace(/[^a-zA-Z0-9_-]/g, '')}?start=${Math.floor((clip.start_ms || 0) / 1000)}&end=${Math.floor((clip.end_ms || 0) / 1000)}&autoplay=0`}
-              className="absolute top-0 left-0 w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        ) : null}
-
-        {/* 2. 単語単位の穴埋めドリルカード */}
-        <div className="bg-white border rounded-xl p-5 space-y-5 shadow-sm">
-          <h2 className="text-base font-bold text-gray-800 border-b pb-2">
-            ディクテーション穴埋め問題
-          </h2>
-
-          <div className="space-y-4">
-            {segments.map((seg) => {
-              const words = (seg.corrected_text || seg.text).split(' ');
-              const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
-
-              return (
-                <div key={seg.id} className="p-4 border rounded-xl bg-gray-50 space-y-3">
-                  <div className="text-xs text-gray-400 font-mono">
-                    #{(seg.idx + 1).toString().padStart(2, '0')} ({((seg.start_ms || 0) / 1000).toFixed(1)}s - {((seg.end_ms || 0) / 1000).toFixed(1)}s)
-                  </div>
-
-                  {/* 単語分解 & 穴埋めインプット表示 */}
-                  <div className="flex flex-wrap gap-2 items-center font-mono">
-                    {words.map((word, wIdx) => {
-                      const key = `${seg.id}-${wIdx}`;
-                      const item = segItems.find((it) => it.word_from === wIdx);
-                      const res = results[key];
-
-                      // cloze_itemsの指定があるか、無ければ全単語を対象
-                      const isTarget = segItems.length > 0 ? !!item : true;
-
-                      if (isTarget) {
-                        return (
-                          <div key={wIdx} className="inline-flex flex-col items-center">
-                            <input
-                              type="text"
-                              value={userAnswers[key] || ''}
-                              onChange={(e) => handleInputChange(key, e.target.value)}
-                              placeholder="---"
-                              className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
-                                res
-                                  ? res.isCorrect
-                                    ? 'border-green-500 bg-green-50 text-green-800'
-                                    : 'border-red-500 bg-red-50 text-red-800'
-                                  : 'border-blue-500 bg-white text-gray-900'
-                              }`}
-                            />
-                            {/* 採点結果の表示 (○ 100% または × (正解単語)) */}
-                            {res && (
-                              <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                                {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <span key={wIdx} className="text-sm font-bold text-gray-800 self-center">
-                          {word}
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  {/* 日本語訳の表示（回答後またはデータ存在時） */}
-                  {seg.ja_text && showResult && (
-                    <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
-                      💡 <strong>訳:</strong> {seg.ja_text}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={handleCheckAnswers}
-            className="w-full py-3 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 shadow-md transition-colors"
-          >
-            回答をチェックする
-          </button>
-        </div>
-
-      </div>
+    <main className="p-4 space-y-4">
+      <h1 className="text-center text-sm text-gray-500 font-mono break-all">
+        {clipId}
+      </h1>
+      {loading && <p className="text-center">署名URL取得中...</p>}
+      {error && (
+        <p className="text-center text-red-600 text-sm">error: {error}</p>
+      )}
+      {url && <ClipPlayer src={url} />}
     </main>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<p className="p-8 text-center">loading...</p>}>
+      <VerifyInner />
+    </Suspense>
   );
 }
 </file>
@@ -376,6 +258,67 @@ export default function VideoDetailPage({
         <TranscriptView videoId={resolvedParams.id} />
       </div>
     </main>
+  );
+}
+</file>
+
+<file path="src/app/globals.css">
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+</file>
+
+<file path="src/app/layout.tsx">
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Create Next App",
+  description: "Generated by create next app",
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col">{children}</body>
+    </html>
   );
 }
 </file>
@@ -874,482 +817,6 @@ export default function TranscriptView({ videoId }: Props) {
         )}
       </div>
     </div>
-  );
-}
-</file>
-
-<file path="repomix実行.bat">
-@echo off
-cd /d "%~dp0"
-npx repomix
-pause
-</file>
-
-<file path="public/file.svg">
-<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
-</file>
-
-<file path="public/globe.svg">
-<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
-</file>
-
-<file path="public/next.svg">
-<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
-</file>
-
-<file path="public/vercel.svg">
-<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
-</file>
-
-<file path="public/window.svg">
-<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
-</file>
-
-<file path="src/app/verify/page.tsx">
-"use client";
-
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { useSignedUrl } from "@/lib/useSignedUrl";
-import ClipPlayer from "@/components/ClipPlayer";
-
-function VerifyInner() {
-  const params = useSearchParams();
-  const clipId = params.get("clip");
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const supabase = createClient();
-  const { url, error, loading } = useSignedUrl(
-    signedIn ? clipId : null,
-    "video",
-  );
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSignedIn(!!data.session);
-    });
-  }, [supabase]);
-
-  const signIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) setAuthError(error.message);
-    else setSignedIn(true);
-  };
-
-  if (signedIn === null) {
-    return <p className="p-8 text-center text-gray-500">loading...</p>;
-  }
-
-  if (!signedIn) {
-    return (
-      <form onSubmit={signIn} className="max-w-sm mx-auto p-8 space-y-3">
-        <h1 className="text-lg font-bold">Sign in</h1>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="email"
-          autoComplete="username"
-          className="w-full border rounded px-3 py-2"
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="password"
-          autoComplete="current-password"
-          className="w-full border rounded px-3 py-2"
-        />
-        <button className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold">
-          Sign in
-        </button>
-        {authError && <p className="text-red-600 text-sm">{authError}</p>}
-      </form>
-    );
-  }
-
-  if (!clipId) {
-    return (
-      <p className="p-8 text-center text-gray-500">
-        URLパラメータに ?clip=&lt;uuid&gt; を指定してください
-      </p>
-    );
-  }
-
-  return (
-    <main className="p-4 space-y-4">
-      <h1 className="text-center text-sm text-gray-500 font-mono break-all">
-        {clipId}
-      </h1>
-      {loading && <p className="text-center">署名URL取得中...</p>}
-      {error && (
-        <p className="text-center text-red-600 text-sm">error: {error}</p>
-      )}
-      {url && <ClipPlayer src={url} />}
-    </main>
-  );
-}
-
-export default function VerifyPage() {
-  return (
-    <Suspense fallback={<p className="p-8 text-center">loading...</p>}>
-      <VerifyInner />
-    </Suspense>
-  );
-}
-</file>
-
-<file path="src/app/globals.css">
-@import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
-</file>
-
-<file path="src/app/layout.tsx">
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export const metadata: Metadata = {
-  title: "Create Next App",
-  description: "Generated by create next app",
-};
-
-export default function RootLayout({ children }: LayoutProps<"/">) {
-  return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
-    </html>
-  );
-}
-</file>
-
-<file path="src/app/page.tsx">
-"use client";
-
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-
-interface Video {
-  id: string;
-  title: string | null;
-  status: string;
-  created_at: string;
-}
-
-interface Clip {
-  id: string;
-  label: string | null;
-  status: string;
-  video_id: string;
-  created_at: string;
-}
-
-export default function DashboardPage() {
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
-
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [clips, setClips] = useState<Clip[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const supabase = createClient();
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSignedIn(!!data.session);
-    });
-  }, [supabase]);
-
-  const fetchData = async () => {
-    if (!signedIn) return;
-    setLoading(true);
-
-    const { data: vData } = await supabase
-      .from("videos")
-      .select("id, title, status, created_at")
-      .order("created_at", { ascending: false });
-
-    if (vData) setVideos(vData);
-
-    const { data: cData } = await supabase
-      .from("clips")
-      .select("id, label, status, video_id, created_at")
-      .order("created_at", { ascending: false });
-
-    if (cData) setClips(cData);
-
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void fetchData();
-  }, [signedIn]);
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) setAuthError(error.message);
-    else setSignedIn(true);
-  };
-
-  const extractYoutubeId = (url: string) => {
-    const match = url.match(/(?:v=|\/embed\/|\/1080\/|\/shorts\/|youtu\.be\/|\/v\/)([^#&?]*)/);
-    return match && match[1].length === 11 ? match[1] : null;
-  };
-
-  const handleAddVideo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitMessage(null);
-
-    const ytId = extractYoutubeId(youtubeUrl);
-    if (!ytId) {
-      setSubmitMessage("🚨 有効なYouTube URLを入力してください。");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("ログインしていません。");
-
-      const { data: video, error: vErr } = await supabase
-        .from("videos")
-        .insert({
-          owner_id: user.id,
-          youtube_id: ytId,
-          title: "（取得中...）",
-          status: "downloading",
-        })
-        .select("id")
-        .single();
-
-      if (vErr) throw vErr;
-
-      const { error: jErr } = await supabase.from("ingest_jobs").insert({
-        owner_id: user.id,
-        video_id: video.id,
-        type: "download",
-        lane: "gpu",
-        priority: 100,
-        payload: {
-          youtube_id: ytId,
-        },
-      });
-
-      if (jErr) throw jErr;
-
-      setSubmitMessage("🎉 動画を追加しました！ワーカー起動時に解析が始まります。");
-      setYoutubeUrl("");
-      void fetchData();
-    } catch (err: any) {
-      setSubmitMessage(`🚨 エラー: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (signedIn === false) {
-    return (
-      <form
-        onSubmit={handleSignIn}
-        className="max-w-sm mx-auto my-12 p-6 space-y-4 bg-white border rounded-xl shadow-sm"
-      >
-        <h2 className="text-lg font-bold text-center">サインイン</h2>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="メールアドレス"
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          required
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="パスワード"
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          required
-        />
-        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">
-          サインイン
-        </button>
-        {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
-      </form>
-    );
-  }
-
-  return (
-    <main className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-3xl mx-auto px-4 space-y-8">
-        <h1 className="text-2xl font-extrabold text-gray-900 border-b pb-4">
-          Dictation App ダッシュボード
-        </h1>
-
-        <section className="bg-white p-5 border rounded-xl shadow-sm space-y-3">
-          <h2 className="text-base font-bold text-gray-800">新規YouTube動画を追加</h2>
-          <form onSubmit={handleAddVideo} className="flex gap-2">
-            <input
-              type="text"
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              required
-            />
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
-            >
-              {isSubmitting ? "送信中..." : "追加"}
-            </button>
-          </form>
-          {submitMessage && (
-            <p className="text-xs font-mono text-gray-700 bg-gray-100 p-2 rounded">
-              {submitMessage}
-            </p>
-          )}
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-gray-800">作成済みクリップ (穴埋めドリル)</h2>
-          {loading ? (
-            <p className="text-xs text-gray-500">読み込み中...</p>
-          ) : clips.length === 0 ? (
-            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
-              クリップがありません。動画詳細画面から作成してください。
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {clips.map((clip) => (
-                <a
-                  key={clip.id}
-                  href={`/clips/${clip.id}`}
-                  className="block p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                      {clip.label || "Clip"}
-                    </span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                        clip.status === "ready"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {clip.status}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-400 font-mono break-all">
-                    ID: {clip.id.slice(0, 8)}...
-                  </div>
-                </a>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-gray-800">登録済み動画一覧 (文字起こし)</h2>
-          {loading ? (
-            <p className="text-xs text-gray-500">読み込み中...</p>
-          ) : videos.length === 0 ? (
-            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
-              登録された動画はありません。
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {videos.map((video) => (
-                <a
-                  key={video.id}
-                  href={`/videos/${video.id}`}
-                  className="flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
-                >
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-800 mb-1">
-                      {video.title || "（タイトル取得中）"}
-                    </h3>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      ID: {video.id}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded font-mono ${
-                      video.status === "ready"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-yellow-100 text-yellow-700"
-                    }`}
-                  >
-                    {video.status}
-                  </span>
-                </a>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
   );
 }
 </file>
@@ -1881,6 +1348,535 @@ if __name__ == "__main__":
     "**/*.mts"
   ],
   "exclude": ["node_modules"]
+}
+</file>
+
+<file path="src/app/clips/[id]/page.tsx">
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { useSignedUrl } from '@/lib/useSignedUrl';
+import ClipPlayer from '@/components/ClipPlayer';
+
+interface Segment {
+  id: string;
+  idx: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  ja_text?: string;
+  corrected_text?: string;
+}
+
+interface ClozeItem {
+  id: string;
+  segment_id: string;
+  word_from: number;
+  word_to: number;
+  answer: string;
+  variants: string[];
+}
+
+export default function ClipPage() {
+  const params = useParams();
+  const id = params?.id as string;
+
+  const [clip, setClip] = useState<any>(null);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 回答状態管理
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
+  const [showResult, setShowResult] = useState(false);
+
+  // R2 署名付き URL
+  const { url: signedUrl, loading: urlLoading } = useSignedUrl(id, 'video');
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    if (!id) return;
+
+    async function fetchData() {
+      setLoading(true);
+
+      const { data: clipData } = await supabase
+        .from('clips')
+        .select('*, videos(youtube_id, title)')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (clipData) {
+        setClip(clipData);
+
+        const { data: segData } = await supabase
+          .from('segments')
+          .select('*')
+          .eq('video_id', clipData.video_id)
+          .gte('idx', clipData.seg_from ?? 0)
+          .lte('idx', clipData.seg_to ?? 9999)
+          .order('idx', { ascending: true });
+
+        if (segData) setSegments(segData);
+
+        const { data: itemData } = await supabase
+          .from('cloze_items')
+          .select('*')
+          .eq('clip_id', id);
+
+        if (itemData) setClozeItems(itemData);
+      }
+
+      setLoading(false);
+    }
+
+    fetchData();
+  }, [id]);
+
+  const handleInputChange = (key: string, value: string) => {
+    setUserAnswers((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleCheckAnswers = () => {
+    const newResults: Record<string, { isCorrect: boolean; score: number; answer: string }> = {};
+
+    segments.forEach((seg) => {
+      const words = (seg.corrected_text || seg.text).split(' ');
+      const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+
+      words.forEach((word, wIdx) => {
+        const key = `${seg.id}-${wIdx}`;
+        const item = segItems.find((it) => it.word_from === wIdx);
+
+        const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+        const userInput = (userAnswers[key] || '').trim().toLowerCase();
+        const gold = targetAnswer.trim().toLowerCase();
+
+        if (userInput === gold) {
+          newResults[key] = { isCorrect: true, score: 1.0, answer: targetAnswer };
+        } else {
+          newResults[key] = { isCorrect: false, score: 0.0, answer: targetAnswer };
+        }
+      });
+    });
+
+    setResults(newResults);
+    setShowResult(true);
+  };
+
+  if (loading) return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
+
+  if (!clip) return (
+    <div className="max-w-xl mx-auto p-6 space-y-4">
+      <p className="text-gray-700 font-bold">クリップが見つかりませんでした。</p>
+      <Link href="/" className="inline-block px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-bold">
+        ← ダッシュボードに戻る
+      </Link>
+    </div>
+  );
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-xl mx-auto px-4 space-y-6">
+        
+        <div className="flex items-center justify-between border-b pb-3">
+          <h1 className="text-lg font-bold text-gray-900">
+            {clip.label || clip.videos?.title || 'ディクテーション穴埋め'}
+          </h1>
+          <Link href="/" className="text-sm text-blue-600 hover:underline font-bold">
+            ← ダッシュボードに戻る
+          </Link>
+        </div>
+
+        {/* 1. プレイヤー領域 */}
+        {signedUrl ? (
+          /* R2に動画準備完了 ➔ 独自ClipPlayerを起動 */
+          <ClipPlayer src={signedUrl} />
+        ) : urlLoading ? (
+          <div className="p-8 bg-white border rounded-xl text-center text-gray-500 text-sm">
+            動画プレイヤーを準備中...
+          </div>
+        ) : (
+          /* ワーカー未処理の場合の表示 */
+          <div className="p-8 bg-amber-50 border border-amber-200 rounded-xl text-center space-y-2">
+            <p className="text-sm font-bold text-amber-800">
+              ⏳ 動画の切り出し処理中です
+            </p>
+            <p className="text-xs text-amber-700">
+              PCで <code className="bg-amber-100 px-1 py-0.5 rounded">run_worker.bat</code> を起動して処理が完了すると、専用プレイヤー（ループ機能付き）で再生できるようになります。
+            </p>
+          </div>
+        )}
+
+        {/* 2. 穴埋めドリルカード */}
+        <div className="bg-white border rounded-xl p-5 space-y-5 shadow-sm">
+          <h2 className="text-base font-bold text-gray-800 border-b pb-2">
+            ディクテーション穴埋め問題
+          </h2>
+
+          <div className="space-y-4">
+            {segments.map((seg) => {
+              const words = (seg.corrected_text || seg.text).split(' ');
+              const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+
+              return (
+                <div key={seg.id} className="p-4 border rounded-xl bg-gray-50 space-y-3">
+                  <div className="text-xs text-gray-400 font-mono">
+                    #{(seg.idx + 1).toString().padStart(2, '0')} ({((seg.start_ms || 0) / 1000).toFixed(1)}s - {((seg.end_ms || 0) / 1000).toFixed(1)}s)
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 items-center font-mono">
+                    {words.map((word, wIdx) => {
+                      const key = `${seg.id}-${wIdx}`;
+                      const item = segItems.find((it) => it.word_from === wIdx);
+                      const res = results[key];
+
+                      const isTarget = segItems.length > 0 ? !!item : true;
+
+                      if (isTarget) {
+                        return (
+                          <div key={wIdx} className="inline-flex flex-col items-center">
+                            <input
+                              type="text"
+                              value={userAnswers[key] || ''}
+                              onChange={(e) => handleInputChange(key, e.target.value)}
+                              placeholder="---"
+                              className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
+                                res
+                                  ? res.isCorrect
+                                    ? 'border-green-500 bg-green-50 text-green-800'
+                                    : 'border-red-500 bg-red-50 text-red-800'
+                                  : 'border-blue-500 bg-white text-gray-900'
+                              }`}
+                            />
+                            {res && (
+                              <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                                {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <span key={wIdx} className="text-sm font-bold text-gray-800 self-center">
+                          {word}
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  {seg.ja_text && showResult && (
+                    <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
+                      💡 <strong>訳:</strong> {seg.ja_text}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={handleCheckAnswers}
+            className="w-full py-3 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 shadow-md transition-colors"
+          >
+            回答をチェックする
+          </button>
+        </div>
+
+      </div>
+    </main>
+  );
+}
+</file>
+
+<file path="src/app/page.tsx">
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+interface Video {
+  id: string;
+  title: string | null;
+  status: string;
+  created_at: string;
+}
+
+interface Clip {
+  id: string;
+  label: string | null;
+  status: string;
+  video_id: string;
+  created_at: string;
+}
+
+export default function DashboardPage() {
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSignedIn(!!data.session);
+    });
+  }, [supabase]);
+
+  const fetchData = async () => {
+    if (!signedIn) return;
+    setLoading(true);
+
+    const { data: vData } = await supabase
+      .from("videos")
+      .select("id, title, status, created_at")
+      .order("created_at", { ascending: false });
+
+    if (vData) setVideos(vData);
+
+    const { data: cData } = await supabase
+      .from("clips")
+      .select("id, label, status, video_id, created_at")
+      .order("created_at", { ascending: false });
+
+    if (cData) setClips(cData);
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void fetchData();
+  }, [signedIn]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) setAuthError(error.message);
+    else setSignedIn(true);
+  };
+
+  const extractYoutubeId = (url: string) => {
+    const match = url.match(/(?:v=|\/embed\/|\/1080\/|\/shorts\/|youtu\.be\/|\/v\/)([^#&?]*)/);
+    return match && match[1].length === 11 ? match[1] : null;
+  };
+
+  const handleAddVideo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitMessage(null);
+
+    const ytId = extractYoutubeId(youtubeUrl);
+    if (!ytId) {
+      setSubmitMessage("🚨 有効なYouTube URLを入力してください。");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("ログインしていません。");
+
+      const { data: video, error: vErr } = await supabase
+        .from("videos")
+        .insert({
+          owner_id: user.id,
+          youtube_id: ytId,
+          title: "（取得中...）",
+          status: "downloading",
+        })
+        .select("id")
+        .single();
+
+      if (vErr) throw vErr;
+
+      const { error: jErr } = await supabase.from("ingest_jobs").insert({
+        owner_id: user.id,
+        video_id: video.id,
+        type: "download",
+        lane: "gpu",
+        priority: 100,
+        payload: {
+          youtube_id: ytId,
+        },
+      });
+
+      if (jErr) throw jErr;
+
+      setSubmitMessage("🎉 動画を追加しました！ワーカー起動時に解析が始まります。");
+      setYoutubeUrl("");
+      void fetchData();
+    } catch (err: any) {
+      setSubmitMessage(`🚨 エラー: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (signedIn === false) {
+    return (
+      <form
+        onSubmit={handleSignIn}
+        className="max-w-sm mx-auto my-12 p-6 space-y-4 bg-white border rounded-xl shadow-sm"
+      >
+        <h2 className="text-lg font-bold text-center">サインイン</h2>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="メールアドレス"
+          className="w-full border rounded-lg px-3 py-2 text-sm"
+          required
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="パスワード"
+          className="w-full border rounded-lg px-3 py-2 text-sm"
+          required
+        />
+        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">
+          サインイン
+        </button>
+        {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
+      </form>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-3xl mx-auto px-4 space-y-8">
+        <h1 className="text-2xl font-extrabold text-gray-900 border-b pb-4">
+          Dictation App ダッシュボード
+        </h1>
+
+        <section className="bg-white p-5 border rounded-xl shadow-sm space-y-3">
+          <h2 className="text-base font-bold text-gray-800">新規YouTube動画を追加</h2>
+          <form onSubmit={handleAddVideo} className="flex gap-2">
+            <input
+              type="text"
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              required
+            />
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+            >
+              {isSubmitting ? "送信中..." : "追加"}
+            </button>
+          </form>
+          {submitMessage && (
+            <p className="text-xs font-mono text-gray-700 bg-gray-100 p-2 rounded">
+              {submitMessage}
+            </p>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-base font-bold text-gray-800">作成済みクリップ (穴埋めドリル)</h2>
+          {loading ? (
+            <p className="text-xs text-gray-500">読み込み中...</p>
+          ) : clips.length === 0 ? (
+            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
+              クリップがありません。動画詳細画面から作成してください。
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {clips.map((clip) => (
+                <a
+                  key={clip.id}
+                  href={`/clips/${clip.id}`}
+                  className="block p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                      {clip.label || "Clip"}
+                    </span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                        clip.status === "ready"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-yellow-100 text-yellow-700"
+                      }`}
+                    >
+                      {clip.status}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400 font-mono break-all">
+                    ID: {clip.id.slice(0, 8)}...
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-base font-bold text-gray-800">登録済み動画一覧 (文字起こし)</h2>
+          {loading ? (
+            <p className="text-xs text-gray-500">読み込み中...</p>
+          ) : videos.length === 0 ? (
+            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
+              登録された動画はありません。
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {videos.map((video) => (
+                <a
+                  key={video.id}
+                  href={`/videos/${video.id}`}
+                  className="flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
+                >
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-800 mb-1">
+                      {video.title || "（タイトル取得中）"}
+                    </h3>
+                    <p className="text-[10px] text-gray-400 font-mono">
+                      ID: {video.id}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded font-mono ${
+                      video.status === "ready"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-yellow-100 text-yellow-700"
+                    }`}
+                  >
+                    {video.status}
+                  </span>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
 }
 </file>
 

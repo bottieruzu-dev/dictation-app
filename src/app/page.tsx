@@ -13,6 +13,7 @@ interface Video {
 interface Clip {
   id: string;
   label: string | null;
+  tags: string[] | null;
   status: string;
   video_id: string;
   created_at: string;
@@ -30,7 +31,13 @@ export default function DashboardPage() {
 
   const [videos, setVideos] = useState<Video[]>([]);
   const [clips, setClips] = useState<Clip[]>([]);
+  const [totalStorageBytes, setTotalStorageBytes] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // 編集用モーダル状態
+  const [editingClip, setEditingClip] = useState<Clip | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editTags, setEditTags] = useState("");
 
   const supabase = createClient();
 
@@ -53,10 +60,20 @@ export default function DashboardPage() {
 
     const { data: cData } = await supabase
       .from("clips")
-      .select("id, label, status, video_id, created_at")
+      .select("id, label, tags, status, video_id, created_at")
       .order("created_at", { ascending: false });
 
     if (cData) setClips(cData);
+
+    // 容量計算
+    const { data: assetData } = await supabase
+      .from("clip_assets")
+      .select("video_bytes");
+
+    if (assetData) {
+      const bytes = assetData.reduce((acc, row) => acc + (row.video_bytes || 0), 0);
+      setTotalStorageBytes(bytes);
+    }
 
     setLoading(false);
   };
@@ -94,9 +111,7 @@ export default function DashboardPage() {
     setIsSubmitting(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("ログインしていません。");
 
       const { data: video, error: vErr } = await supabase
@@ -118,14 +133,12 @@ export default function DashboardPage() {
         type: "download",
         lane: "gpu",
         priority: 100,
-        payload: {
-          youtube_id: ytId,
-        },
+        payload: { youtube_id: ytId },
       });
 
       if (jErr) throw jErr;
 
-      setSubmitMessage("🎉 動画を追加しました！ワーカー起動時に解析が始まります。");
+      setSubmitMessage("🎉 動画を追加しました！");
       setYoutubeUrl("");
       void fetchData();
     } catch (err: any) {
@@ -135,43 +148,56 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDeleteClip = async (clipId: string) => {
+    if (!confirm("このクリップを削除しますか？（クラウドストレージ容量が解放されます）")) return;
+
+    await supabase.from("clips").delete().eq("id", clipId);
+    void fetchData();
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingClip) return;
+    const tagArray = editTags.split(",").map(t => t.trim()).filter(Boolean);
+
+    await supabase.from("clips").update({
+      label: editLabel,
+      tags: tagArray
+    }).eq("id", editingClip.id);
+
+    setEditingClip(null);
+    void fetchData();
+  };
+
   if (signedIn === false) {
     return (
-      <form
-        onSubmit={handleSignIn}
-        className="max-w-sm mx-auto my-12 p-6 space-y-4 bg-white border rounded-xl shadow-sm"
-      >
+      <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-12 p-6 space-y-4 bg-white border rounded-xl shadow-sm">
         <h2 className="text-lg font-bold text-center">サインイン</h2>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="メールアドレス"
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          required
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="パスワード"
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          required
-        />
-        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">
-          サインイン
-        </button>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">サインイン</button>
         {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
       </form>
     );
   }
 
+  const storageMb = (totalStorageBytes / (1024 * 1024)).toFixed(1);
+  const storageLimitMb = 10000; // Cloudflare R2 10GB 無料枠
+
   return (
     <main className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-3xl mx-auto px-4 space-y-8">
-        <h1 className="text-2xl font-extrabold text-gray-900 border-b pb-4">
-          Dictation App ダッシュボード
-        </h1>
+        
+        <div className="flex justify-between items-center border-b pb-4">
+          <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
+          
+          {/* クラウド容量表示 */}
+          <div className="text-right">
+            <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
+            <div className="text-sm font-mono font-bold text-blue-600">
+              {storageMb} MB / 10 GB
+            </div>
+          </div>
+        </div>
 
         <section className="bg-white p-5 border rounded-xl shadow-sm space-y-3">
           <h2 className="text-base font-bold text-gray-800">新規YouTube動画を追加</h2>
@@ -180,23 +206,15 @@ export default function DashboardPage() {
               type="text"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
+              placeholder="[https://www.youtube.com/watch?v=](https://www.youtube.com/watch?v=)..."
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
               required
             />
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
-            >
+            <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
               {isSubmitting ? "送信中..." : "追加"}
             </button>
           </form>
-          {submitMessage && (
-            <p className="text-xs font-mono text-gray-700 bg-gray-100 p-2 rounded">
-              {submitMessage}
-            </p>
-          )}
+          {submitMessage && <p className="text-xs font-mono text-gray-700 bg-gray-100 p-2 rounded">{submitMessage}</p>}
         </section>
 
         <section className="space-y-3">
@@ -210,72 +228,85 @@ export default function DashboardPage() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {clips.map((clip) => (
-                <a
-                  key={clip.id}
-                  href={`/clips/${clip.id}`}
-                  className="block p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                      {clip.label || "Clip"}
-                    </span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                        clip.status === "ready"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {clip.status}
-                    </span>
+                <div key={clip.id} className="p-4 bg-white border rounded-xl shadow-sm space-y-3">
+                  <div className="flex justify-between items-start">
+                    <a href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600">
+                      {clip.label || "無題のクリップ"}
+                    </a>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => {
+                          setEditingClip(clip);
+                          setEditLabel(clip.label || "");
+                          setEditTags((clip.tags || []).join(", "));
+                        }}
+                        className="text-xs text-gray-500 hover:bg-gray-100 px-1.5 py-0.5 rounded"
+                      >
+                        ✏️ 編集
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClip(clip.id)}
+                        className="text-xs text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"
+                      >
+                        🗑️ 削除
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-400 font-mono break-all">
-                    ID: {clip.id.slice(0, 8)}...
-                  </div>
-                </a>
+
+                  {/* タグ表示 */}
+                  {clip.tags && clip.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {clip.tags.map((t, idx) => (
+                        <span key={idx} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
+                          #{t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <a
+                    href={`/clips/${clip.id}`}
+                    className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
+                  >
+                    学習をスタート ➔
+                  </a>
+                </div>
               ))}
             </div>
           )}
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-gray-800">登録済み動画一覧 (文字起こし)</h2>
-          {loading ? (
-            <p className="text-xs text-gray-500">読み込み中...</p>
-          ) : videos.length === 0 ? (
-            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
-              登録された動画はありません。
+        {/* 編集用モーダル */}
+        {editingClip && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl p-5 w-full max-w-sm space-y-4">
+              <h3 className="font-bold text-base">クリップ名の変更とタグ付け</h3>
+              <div className="space-y-2 text-xs">
+                <label className="block font-bold">名前</label>
+                <input
+                  type="text"
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="例: 自己紹介の挨拶"
+                />
+                <label className="block font-bold">タグ (カンマ区切り)</label>
+                <input
+                  type="text"
+                  value={editTags}
+                  onChange={(e) => setEditTags(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="例: 日常会話, 初級"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setEditingClip(null)} className="px-3 py-1.5 text-xs text-gray-600">キャンセル</button>
+                <button onClick={handleSaveEdit} className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold">保存</button>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {videos.map((video) => (
-                <a
-                  key={video.id}
-                  href={`/videos/${video.id}`}
-                  className="flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
-                >
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-800 mb-1">
-                      {video.title || "（タイトル取得中）"}
-                    </h3>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      ID: {video.id}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded font-mono ${
-                      video.status === "ready"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-yellow-100 text-yellow-700"
-                    }`}
-                  >
-                    {video.status}
-                  </span>
-                </a>
-              ))}
-            </div>
-          )}
-        </section>
+          </div>
+        )}
+
       </div>
     </main>
   );
