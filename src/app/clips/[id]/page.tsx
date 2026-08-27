@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 interface Video {
@@ -189,7 +190,6 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center border-b pb-4">
           <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
           
-          {/* クラウド容量表示 */}
           <div className="text-right">
             <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
             <div className="text-sm font-mono font-bold text-blue-600">
@@ -231,9 +231,9 @@ export default function DashboardPage() {
               {clips.map((clip) => (
                 <div key={clip.id} className="p-4 bg-white border rounded-xl shadow-sm space-y-3">
                   <div className="flex justify-between items-start">
-                    <a href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600">
+                    <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600">
                       {clip.label || "無題のクリップ"}
-                    </a>
+                    </Link>
                     <div className="flex gap-1">
                       <button
                         onClick={() => {
@@ -264,12 +264,12 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  <a
+                  <Link
                     href={`/clips/${clip.id}`}
                     className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
                   >
                     学習をスタート ➔
-                  </a>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -288,7 +288,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {videos.map((video) => (
-                <a
+                <Link
                   key={video.id}
                   href={`/videos/${video.id}`}
                   className="flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
@@ -310,7 +310,7 @@ export default function DashboardPage() {
                   >
                     {video.status}
                   </span>
-                </a>
+                </Link>
               ))}
             </div>
           )}
