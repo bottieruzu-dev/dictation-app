@@ -15,7 +15,6 @@ interface Segment {
   text: string;
   ja_text?: string;
   corrected_text?: string;
-  phonetic_info?: { word: string; type: string; label: string }[];
   skeletons?: { text: string; label: string }[];
 }
 
@@ -41,7 +40,10 @@ export default function ClipPage() {
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
   const [showResult, setShowResult] = useState(false);
 
-  const { url: signedUrl, loading: urlLoading } = useSignedUrl(id, 'video');
+  // ジャンプ再生用の時間状態
+  const [seekToTime, setSeekToTime] = useState<number | null>(null);
+
+  const { url: signedUrl } = useSignedUrl(id, 'video');
   const supabase = createClient();
 
   useEffect(() => {
@@ -114,6 +116,10 @@ export default function ClipPage() {
     setShowResult(true);
   };
 
+  const handlePlaySegment = (startMs: number) => {
+    setSeekToTime(startMs / 1000);
+  };
+
   if (loading) return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
 
   return (
@@ -130,7 +136,7 @@ export default function ClipPage() {
         </div>
 
         {signedUrl ? (
-          <ClipPlayer src={signedUrl} />
+          <ClipPlayer src={signedUrl} seekToTime={seekToTime} />
         ) : (
           <div className="p-8 bg-amber-50 border border-amber-200 rounded-xl text-center text-xs text-amber-800">
             動画準備中またはワーカー処理中...
@@ -149,8 +155,14 @@ export default function ClipPage() {
 
               return (
                 <div key={seg.id} className="p-4 border rounded-xl bg-gray-50 space-y-3">
-                  <div className="text-xs text-gray-400 font-mono">
-                    #{(seg.idx + 1).toString().padStart(2, '0')} ({((seg.start_ms || 0) / 1000).toFixed(1)}s - {((seg.end_ms || 0) / 1000).toFixed(1)}s)
+                  <div className="flex justify-between items-center text-xs text-gray-400 font-mono">
+                    <span>#{(seg.idx + 1).toString().padStart(2, '0')} ({((seg.start_ms || 0) / 1000).toFixed(1)}s - {((seg.end_ms || 0) / 1000).toFixed(1)}s)</span>
+                    <button
+                      onClick={() => handlePlaySegment(seg.start_ms)}
+                      className="px-2 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] hover:bg-blue-200 transition-colors flex items-center gap-1"
+                    >
+                      ▶️ この文から再生
+                    </button>
                   </div>
 
                   <div className="flex flex-wrap gap-2 items-center font-mono">
@@ -158,14 +170,6 @@ export default function ClipPage() {
                       const key = `${seg.id}-${wIdx}`;
                       const item = segItems.find((it) => it.word_from === wIdx);
                       const res = results[key];
-
-                      const cleanWord = word.replace(/[^a-zA-Z']/g, '').toLowerCase();
-                      const phonetic = cleanWord
-                        ? (seg.phonetic_info || []).find((p) => {
-                            const pWords = p.word.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-zA-Z']/g, ''));
-                            return pWords.includes(cleanWord);
-                          })
-                        : undefined;
 
                       const isTarget = segItems.length > 0 ? !!item : true;
 
@@ -178,16 +182,9 @@ export default function ClipPage() {
                               onChange={(e) => handleInputChange(key, e.target.value)}
                               placeholder="---"
                               className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
-                                phonetic ? 'border-red-500 bg-red-50 text-red-900' : 'border-blue-500 bg-white text-gray-900'
-                              } ${
-                                res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : ''
+                                res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
                               }`}
                             />
-                            {phonetic && (
-                              <span className="text-[9px] text-red-600 font-bold mt-0.5">
-                                {phonetic.label}
-                              </span>
-                            )}
                             {res && (
                               <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                                 {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
@@ -198,15 +195,16 @@ export default function ClipPage() {
                       }
 
                       return (
-                        <span key={wIdx} className={`text-sm font-bold ${phonetic ? 'text-red-600 underline' : 'text-gray-800'}`}>
+                        <span key={wIdx} className="text-sm font-bold text-gray-800">
                           {word}
                         </span>
                       );
                     })}
                   </div>
 
-                  {seg.skeletons && seg.skeletons.length > 0 && (
-                    <div className="mt-2 space-y-1">
+                  {/* 回答チェック後にのみ表示 */}
+                  {showResult && seg.skeletons && seg.skeletons.length > 0 && (
+                    <div className="mt-2 space-y-1 pt-2 border-t border-gray-200">
                       {seg.skeletons.map((sk, idx) => (
                         <div key={idx} className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded font-semibold">
                           💡 構文: <strong>{sk.text}</strong> ({sk.label})
@@ -215,8 +213,8 @@ export default function ClipPage() {
                     </div>
                   )}
 
-                  {seg.ja_text && showResult && (
-                    <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600">
+                  {showResult && seg.ja_text && (
+                    <div className="mt-1 text-xs text-gray-600">
                       💡 <strong>訳:</strong> {seg.ja_text}
                     </div>
                   )}

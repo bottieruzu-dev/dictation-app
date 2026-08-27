@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 
 interface Video {
   id: string;
+  youtube_id: string;
   title: string | null;
   status: string;
   created_at: string;
@@ -18,6 +19,10 @@ interface Clip {
   status: string;
   video_id: string;
   created_at: string;
+  videos?: {
+    youtube_id: string;
+    title: string;
+  };
 }
 
 export default function DashboardPage() {
@@ -25,6 +30,9 @@ export default function DashboardPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"clips" | "videos">("clips");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,7 +43,6 @@ export default function DashboardPage() {
   const [totalStorageBytes, setTotalStorageBytes] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // 編集用モーダル状態
   const [editingClip, setEditingClip] = useState<Clip | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editTags, setEditTags] = useState("");
@@ -54,14 +61,14 @@ export default function DashboardPage() {
 
     const { data: vData } = await supabase
       .from("videos")
-      .select("id, title, status, created_at")
+      .select("id, youtube_id, title, status, created_at")
       .order("created_at", { ascending: false });
 
     if (vData) setVideos(vData);
 
     const { data: cData } = await supabase
       .from("clips")
-      .select("id, label, tags, status, video_id, created_at")
+      .select("*, videos(youtube_id, title)")
       .order("created_at", { ascending: false });
 
     if (cData) setClips(cData);
@@ -85,10 +92,7 @@ export default function DashboardPage() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setAuthError(error.message);
     else setSignedIn(true);
   };
@@ -149,19 +153,18 @@ export default function DashboardPage() {
   };
 
   const handleDeleteClip = async (clipId: string) => {
-    if (!confirm("このクリップを削除しますか？（クラウドストレージ容量が解放されます）")) return;
-
+    if (!confirm("このクリップを削除しますか？")) return;
     await supabase.from("clips").delete().eq("id", clipId);
     void fetchData();
   };
 
   const handleSaveEdit = async () => {
     if (!editingClip) return;
-    const tagArray = editTags.split(",").map(t => t.trim()).filter(Boolean);
+    const tagArray = editTags.split(",").map((t) => t.trim()).filter(Boolean);
 
     await supabase.from("clips").update({
       label: editLabel,
-      tags: tagArray
+      tags: tagArray,
     }).eq("id", editingClip.id);
 
     setEditingClip(null);
@@ -182,24 +185,33 @@ export default function DashboardPage() {
 
   const storageMb = (totalStorageBytes / (1024 * 1024)).toFixed(1);
 
+  // 検索フィルタリング
+  const filteredClips = clips.filter((c) => {
+    const q = searchQuery.toLowerCase();
+    const labelMatch = (c.label || "").toLowerCase().includes(q);
+    const tagMatch = (c.tags || []).some((t) => t.toLowerCase().includes(q));
+    return labelMatch || tagMatch;
+  });
+
+  const filteredVideos = videos.filter((v) =>
+    (v.title || "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <main className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-3xl mx-auto px-4 space-y-8">
+      <div className="max-w-3xl mx-auto px-4 space-y-6">
         
         <div className="flex justify-between items-center border-b pb-4">
           <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
-          
           <div className="text-right">
             <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
-            <div className="text-sm font-mono font-bold text-blue-600">
-              {storageMb} MB / 10 GB
-            </div>
+            <div className="text-sm font-mono font-bold text-blue-600">{storageMb} MB / 10 GB</div>
           </div>
         </div>
 
-        {/* 1. 新規動画追加 */}
+        {/* 1. YouTube追加フォーム */}
         <section className="bg-white p-5 border rounded-xl shadow-sm space-y-3">
-          <h2 className="text-base font-bold text-gray-800">新規YouTube動画を追加</h2>
+          <h2 className="text-sm font-bold text-gray-800">新規YouTube動画を追加</h2>
           <form onSubmit={handleAddVideo} className="flex gap-2">
             <input
               type="text"
@@ -216,106 +228,158 @@ export default function DashboardPage() {
           {submitMessage && <p className="text-xs font-mono text-gray-700 bg-gray-100 p-2 rounded">{submitMessage}</p>}
         </section>
 
-        {/* 2. 作成済みクリップ (穴埋めドリル) */}
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-gray-800">作成済みクリップ (穴埋めドリル)</h2>
-          {loading ? (
-            <p className="text-xs text-gray-500">読み込み中...</p>
-          ) : clips.length === 0 ? (
-            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
-              クリップがありません。下の動画一覧から作成してください。
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {clips.map((clip) => (
-                <div key={clip.id} className="p-4 bg-white border rounded-xl shadow-sm space-y-3">
-                  <div className="flex justify-between items-start">
-                    <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600">
-                      {clip.label || "無題のクリップ"}
+        {/* 2. 検索バー & タブ切り替え */}
+        <div className="space-y-3">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="🔍 題名やタグで検索..."
+            className="w-full border bg-white rounded-xl px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-500"
+          />
+
+          <div className="flex border-b">
+            <button
+              onClick={() => setActiveTab("clips")}
+              className={`flex-1 py-3 font-bold text-sm text-center border-b-2 transition-colors ${
+                activeTab === "clips" ? "border-blue-600 text-blue-600 bg-white" : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              ✂️ 作成済みクリップ ({filteredClips.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("videos")}
+              className={`flex-1 py-3 font-bold text-sm text-center border-b-2 transition-colors ${
+                activeTab === "videos" ? "border-blue-600 text-blue-600 bg-white" : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              📹 登録済み動画 ({filteredVideos.length})
+            </button>
+          </div>
+        </div>
+
+        {/* 3. クリップ一覧タブ */}
+        {activeTab === "clips" && (
+          <section>
+            {loading ? (
+              <p className="text-xs text-gray-500 text-center py-8">読み込み中...</p>
+            ) : filteredClips.length === 0 ? (
+              <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+                該当するクリップが見つかりません。
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {filteredClips.map((clip) => {
+                  const ytId = clip.videos?.youtube_id;
+                  const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
+
+                  return (
+                    <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
+                      {thumbUrl && (
+                        <div className="aspect-video bg-black relative">
+                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+
+                      <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-start">
+                            <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600 line-clamp-1">
+                              {clip.label || "無題のクリップ"}
+                            </Link>
+                            <div className="flex gap-1 shrink-0">
+                              <button
+                                onClick={() => {
+                                  setEditingClip(clip);
+                                  setEditLabel(clip.label || "");
+                                  setEditTags((clip.tags || []).join(", "));
+                                }}
+                                className="text-xs text-gray-500 hover:bg-gray-100 px-1.5 py-0.5 rounded"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClip(clip.id)}
+                                className="text-xs text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+
+                          {clip.tags && clip.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {clip.tags.map((t, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => setSearchQuery(t)}
+                                  className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono hover:bg-blue-50 hover:text-blue-600"
+                                >
+                                  #{t}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <Link
+                          href={`/clips/${clip.id}`}
+                          className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
+                        >
+                          学習をスタート ➔
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* 4. 動画一覧タブ */}
+        {activeTab === "videos" && (
+          <section>
+            {loading ? (
+              <p className="text-xs text-gray-500 text-center py-8">読み込み中...</p>
+            ) : filteredVideos.length === 0 ? (
+              <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+                該当する動画が見つかりません。
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {filteredVideos.map((video) => {
+                  const thumbUrl = video.youtube_id ? `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg` : null;
+
+                  return (
+                    <Link
+                      key={video.id}
+                      href={`/videos/${video.id}`}
+                      className="bg-white border rounded-xl overflow-hidden shadow-sm hover:border-blue-500 transition-colors flex flex-col justify-between"
+                    >
+                      {thumbUrl && (
+                        <div className="aspect-video bg-black">
+                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div className="p-3 space-y-1">
+                        <h3 className="text-sm font-bold text-gray-800 line-clamp-2">
+                          {video.title || "（タイトル取得中）"}
+                        </h3>
+                        <div className="flex justify-between items-center text-[10px] text-gray-400 font-mono">
+                          <span>{video.status}</span>
+                          <span className="text-blue-600 font-bold">文字起こしを見る ➔</span>
+                        </div>
+                      </div>
                     </Link>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          setEditingClip(clip);
-                          setEditLabel(clip.label || "");
-                          setEditTags((clip.tags || []).join(", "));
-                        }}
-                        className="text-xs text-gray-500 hover:bg-gray-100 px-1.5 py-0.5 rounded"
-                      >
-                        ✏️ 編集
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClip(clip.id)}
-                        className="text-xs text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"
-                      >
-                        🗑️ 削除
-                      </button>
-                    </div>
-                  </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
 
-                  {clip.tags && clip.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {clip.tags.map((t, idx) => (
-                        <span key={idx} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <Link
-                    href={`/clips/${clip.id}`}
-                    className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
-                  >
-                    学習をスタート ➔
-                  </Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 3. 登録済み動画一覧 (文字起こし・切り出し元) */}
-        <section className="space-y-3">
-          <h2 className="text-base font-bold text-gray-800">登録済み動画一覧 (文字起こし)</h2>
-          {loading ? (
-            <p className="text-xs text-gray-500">読み込み中...</p>
-          ) : videos.length === 0 ? (
-            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
-              登録された動画はありません。
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {videos.map((video) => (
-                <Link
-                  key={video.id}
-                  href={`/videos/${video.id}`}
-                  className="flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
-                >
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-800 mb-1">
-                      {video.title || "（タイトル取得中）"}
-                    </h3>
-                    <p className="text-[10px] text-gray-400 font-mono">
-                      ID: {video.id}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded font-mono ${
-                      video.status === "ready"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-yellow-100 text-yellow-700"
-                    }`}
-                  >
-                    {video.status}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 編集用モーダル */}
+        {/* 編集モーダル */}
         {editingClip && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl p-5 w-full max-w-sm space-y-4">

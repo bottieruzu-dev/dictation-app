@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 
 interface ClipPlayerProps {
   src: string;
+  seekToTime?: number | null;
 }
 
-export default function ClipPlayer({ src }: ClipPlayerProps) {
+export default function ClipPlayer({ src, seekToTime }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -16,9 +17,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
   const [loopGap, setLoopGap] = useState<number | null>(null);
   const [seekableOk, setSeekableOk] = useState(false);
 
-  // ドラッグ状態管理
   const isDraggingRef = useRef(false);
-  // 再生前の「予約シーク時間」
   const pendingSeekTimeRef = useRef<number | null>(null);
 
   const loopStartRef = useRef(0);
@@ -28,7 +27,15 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
 
   isLoopingRef.current = isLooping;
 
-  // 再生時間の監視 & ループ判定 (rAF)
+  // 外部からのジャンプ再生指示
+  useEffect(() => {
+    if (seekToTime !== undefined && seekToTime !== null && videoRef.current) {
+      videoRef.current.currentTime = seekToTime;
+      void videoRef.current.play();
+      setIsPlaying(true);
+    }
+  }, [seekToTime]);
+
   useEffect(() => {
     let animId: number;
     const checkLoop = () => {
@@ -38,11 +45,9 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
           setCurrentTime(v.currentTime);
         }
 
-        // ループ判定
         if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
           const now = performance.now();
           if (lastLoopTimeRef.current !== null) {
-            // 【修正箇所】再生速度(playbackRate)を考慮して、本来かかるべき時間を正確に計算
             const expectedDuration = ((loopEndRef.current - loopStartRef.current) * 1000) / v.playbackRate;
             const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
             setLoopGap(pureGap);
@@ -141,7 +146,6 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
         className="w-full rounded-lg bg-black aspect-video object-contain"
       />
 
-      {/* シークバー */}
       <div className="space-y-1">
         <input
           type="range"
@@ -165,7 +169,7 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
       <div className="flex items-center justify-between gap-2">
         <button
           onClick={togglePlay}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700"
         >
           {isPlaying ? "PAUSE" : "PLAY"}
         </button>
@@ -198,17 +202,15 @@ export default function ClipPlayer({ src }: ClipPlayerProps) {
         </button>
       </div>
 
-      {/* デバッグ情報 */}
       <div className="p-3 bg-gray-50 rounded-lg text-xs space-y-1 font-mono text-gray-700">
         <div>
-          seekable (Range対応):{" "}
+          seekable:{" "}
           <b className={seekableOk ? "text-green-600" : "text-red-600"}>
             {seekableOk ? "OK" : "NG"}
           </b>
         </div>
         <div>
-          loop gap:{" "}
-          <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
+          loop gap: <b>{loopGap !== null ? `${loopGap} ms` : "ー"}</b>
         </div>
       </div>
     </div>
