@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 interface Video {
@@ -65,7 +66,6 @@ export default function DashboardPage() {
 
     if (cData) setClips(cData);
 
-    // 容量計算
     const { data: assetData } = await supabase
       .from("clip_assets")
       .select("video_bytes");
@@ -181,7 +181,6 @@ export default function DashboardPage() {
   }
 
   const storageMb = (totalStorageBytes / (1024 * 1024)).toFixed(1);
-  const storageLimitMb = 10000; // Cloudflare R2 10GB 無料枠
 
   return (
     <main className="min-h-screen bg-gray-50 py-8">
@@ -190,7 +189,6 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center border-b pb-4">
           <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
           
-          {/* クラウド容量表示 */}
           <div className="text-right">
             <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
             <div className="text-sm font-mono font-bold text-blue-600">
@@ -199,6 +197,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* 1. 新規動画追加 */}
         <section className="bg-white p-5 border rounded-xl shadow-sm space-y-3">
           <h2 className="text-base font-bold text-gray-800">新規YouTube動画を追加</h2>
           <form onSubmit={handleAddVideo} className="flex gap-2">
@@ -206,7 +205,7 @@ export default function DashboardPage() {
               type="text"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="[https://www.youtube.com/watch?v=](https://www.youtube.com/watch?v=)..."
+              placeholder="https://www.youtube.com/watch?v=..."
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
               required
             />
@@ -217,22 +216,23 @@ export default function DashboardPage() {
           {submitMessage && <p className="text-xs font-mono text-gray-700 bg-gray-100 p-2 rounded">{submitMessage}</p>}
         </section>
 
+        {/* 2. 作成済みクリップ (穴埋めドリル) */}
         <section className="space-y-3">
           <h2 className="text-base font-bold text-gray-800">作成済みクリップ (穴埋めドリル)</h2>
           {loading ? (
             <p className="text-xs text-gray-500">読み込み中...</p>
           ) : clips.length === 0 ? (
             <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
-              クリップがありません。動画詳細画面から作成してください。
+              クリップがありません。下の動画一覧から作成してください。
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {clips.map((clip) => (
                 <div key={clip.id} className="p-4 bg-white border rounded-xl shadow-sm space-y-3">
                   <div className="flex justify-between items-start">
-                    <a href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600">
+                    <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600">
                       {clip.label || "無題のクリップ"}
-                    </a>
+                    </Link>
                     <div className="flex gap-1">
                       <button
                         onClick={() => {
@@ -253,7 +253,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* タグ表示 */}
                   {clip.tags && clip.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {clip.tags.map((t, idx) => (
@@ -264,13 +263,53 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  <a
+                  <Link
                     href={`/clips/${clip.id}`}
                     className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
                   >
                     学習をスタート ➔
-                  </a>
+                  </Link>
                 </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 3. 登録済み動画一覧 (文字起こし・切り出し元) */}
+        <section className="space-y-3">
+          <h2 className="text-base font-bold text-gray-800">登録済み動画一覧 (文字起こし)</h2>
+          {loading ? (
+            <p className="text-xs text-gray-500">読み込み中...</p>
+          ) : videos.length === 0 ? (
+            <div className="bg-white p-4 text-center border rounded-xl text-gray-400 text-sm">
+              登録された動画はありません。
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {videos.map((video) => (
+                <Link
+                  key={video.id}
+                  href={`/videos/${video.id}`}
+                  className="flex items-center justify-between p-4 bg-white border rounded-xl shadow-sm hover:border-blue-500 transition-colors"
+                >
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-800 mb-1">
+                      {video.title || "（タイトル取得中）"}
+                    </h3>
+                    <p className="text-[10px] text-gray-400 font-mono">
+                      ID: {video.id}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded font-mono ${
+                      video.status === "ready"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-yellow-100 text-yellow-700"
+                    }`}
+                  >
+                    {video.status}
+                  </span>
+                </Link>
               ))}
             </div>
           )}
@@ -278,7 +317,7 @@ export default function DashboardPage() {
 
         {/* 編集用モーダル */}
         {editingClip && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl p-5 w-full max-w-sm space-y-4">
               <h3 className="font-bold text-base">クリップ名の変更とタグ付け</h3>
               <div className="space-y-2 text-xs">
