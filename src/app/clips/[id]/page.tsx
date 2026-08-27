@@ -159,9 +159,13 @@ export default function ClipPage() {
                       const item = segItems.find((it) => it.word_from === wIdx);
                       const res = results[key];
 
-                      const phonetic = (seg.phonetic_info || []).find(
-                        (p) => p.word.toLowerCase() === word.replace(/[^a-zA-Z]/g, '').toLowerCase()
-                      );
+                      const cleanWord = word.replace(/[^a-zA-Z']/g, '').toLowerCase();
+                      const phonetic = cleanWord
+                        ? (seg.phonetic_info || []).find((p) => {
+                            const pWords = p.word.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-zA-Z']/g, ''));
+                            return pWords.includes(cleanWord);
+                          })
+                        : undefined;
 
                       const isTarget = segItems.length > 0 ? !!item : true;
 
