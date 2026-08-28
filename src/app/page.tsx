@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [clips, setClips] = useState<Clip[]>([]);
   const [totalStorageBytes, setTotalStorageBytes] = useState(0);
+  const [orbCount, setOrbCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   const [editingClip, setEditingClip] = useState<Clip | null>(null);
@@ -59,6 +60,13 @@ export default function DashboardPage() {
     if (!signedIn) return;
     setLoading(true);
 
+    // 1. 初期オーブ処理・残高の呼び出し
+    const { data: orbRes, error: orbErr } = await supabase.rpc("ensure_initial_orbs");
+    if (!orbErr && orbRes !== null) {
+      setOrbCount(orbRes);
+    }
+
+    // 2. 動画一覧の取得
     const { data: vData } = await supabase
       .from("videos")
       .select("id, youtube_id, title, status, created_at")
@@ -66,6 +74,7 @@ export default function DashboardPage() {
 
     if (vData) setVideos(vData);
 
+    // 3. クリップ一覧の取得
     const { data: cData } = await supabase
       .from("clips")
       .select("*, videos(youtube_id, title)")
@@ -73,6 +82,7 @@ export default function DashboardPage() {
 
     if (cData) setClips(cData);
 
+    // 4. ストレージ使用量取得
     const { data: assetData } = await supabase
       .from("clip_assets")
       .select("video_bytes");
@@ -185,7 +195,6 @@ export default function DashboardPage() {
 
   const storageMb = (totalStorageBytes / (1024 * 1024)).toFixed(1);
 
-  // 検索フィルタリング
   const filteredClips = clips.filter((c) => {
     const q = searchQuery.toLowerCase();
     const labelMatch = (c.label || "").toLowerCase().includes(q);
@@ -209,9 +218,21 @@ export default function DashboardPage() {
               📝 間違いノート・履歴を開く ➔
             </Link>
           </div>
-          <div className="text-right">
-            <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
-            <div className="text-sm font-mono font-bold text-blue-600">{storageMb} MB / 10 GB</div>
+
+          <div className="flex items-center gap-4 text-right">
+            {/* ★ 新機能：オーブ表示 */}
+            <div className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-1.5">
+              <span className="text-base">💎</span>
+              <div className="text-left">
+                <div className="text-[10px] font-bold opacity-80 leading-none">オーブ</div>
+                <div className="text-sm font-black font-mono leading-tight">{orbCount} 個</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
+              <div className="text-sm font-mono font-bold text-blue-600">{storageMb} MB / 10 GB</div>
+            </div>
           </div>
         </div>
 

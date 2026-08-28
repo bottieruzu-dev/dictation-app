@@ -103,112 +103,6 @@ tsconfig.json
 <files>
 This section contains the contents of the repository's files.
 
-<file path="src/app/history/page.tsx">
-'use client';
-
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
-
-interface Attempt {
-  id: string;
-  clip_id: string;
-  input_raw: string;
-  answer_gold: string;
-  created_at: string;
-  clips?: {
-    label: string;
-  };
-}
-
-export default function HistoryPage() {
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const supabase = createClient();
-
-  useEffect(() => {
-    async function fetchAttempts() {
-      setLoading(true);
-      const { data } = await supabase
-        .from('attempts')
-        .select('*, clips(label)')
-        .eq('is_correct', false)
-        .order('created_at', { ascending: false });
-
-      if (data) setAttempts(data);
-      setLoading(false);
-    }
-
-    fetchAttempts();
-  }, []);
-
-  const handlePrintPdf = () => {
-    window.print();
-  };
-
-  return (
-    <main className="min-h-screen bg-gray-50 py-8 print:bg-white print:py-0">
-      <div className="max-w-3xl mx-auto px-4 space-y-6">
-        
-        <div className="flex items-center justify-between border-b pb-4 print:hidden">
-          <h1 className="text-xl font-bold text-gray-900">📝 間違いノート・学習履歴</h1>
-          <div className="flex gap-2">
-            <button
-              onClick={handlePrintPdf}
-              className="px-4 py-2 bg-green-600 text-white font-bold text-xs rounded-lg hover:bg-green-700 shadow-sm"
-            >
-              📄 PDF一覧をダウンロード
-            </button>
-            <Link href="/" className="px-3 py-2 bg-gray-200 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-300">
-              ← ダッシュボード
-            </Link>
-          </div>
-        </div>
-
-        {/* 印刷/PDF専用ヘッダー */}
-        <div className="hidden print:block border-b pb-2 mb-4">
-          <h1 className="text-2xl font-bold text-black">Dictation App - 間違いデータ分析レポート</h1>
-          <p className="text-xs text-gray-500">出力日時: {new Date().toLocaleString()}</p>
-        </div>
-
-        {loading ? (
-          <p className="text-xs text-gray-500 text-center py-8">履歴を読み込み中...</p>
-        ) : attempts.length === 0 ? (
-          <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
-            間違えた問題の記録はありません！素晴らしいです。
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {attempts.map((att) => (
-              <div key={att.id} className="p-4 bg-white border rounded-xl shadow-sm space-y-2 print:border-gray-300 print:shadow-none">
-                <div className="flex justify-between items-center text-xs text-gray-400 font-mono border-b pb-1">
-                  <span>📅 {new Date(att.created_at).toLocaleString()}</span>
-                  <Link href={`/clips/${att.clip_id}`} className="text-blue-600 font-bold hover:underline print:hidden">
-                    {att.clips?.label || 'クリップを開く'} ➔
-                  </Link>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-sm font-mono pt-1">
-                  <div className="bg-red-50 p-2 rounded border border-red-100">
-                    <span className="text-[10px] text-red-500 block font-bold">あなたの回答:</span>
-                    <span className="font-bold text-red-800">{att.input_raw || '（未入力）'}</span>
-                  </div>
-                  <div className="bg-green-50 p-2 rounded border border-green-100">
-                    <span className="text-[10px] text-green-600 block font-bold">正解:</span>
-                    <span className="font-bold text-green-800">{att.answer_gold}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-      </div>
-    </main>
-  );
-}
-</file>
-
 <file path="repomix実行.bat">
 @echo off
 cd /d "%~dp0"
@@ -660,228 +554,6 @@ export default function DrillView({ clipId, signedUrl }: Props) {
 }
 </file>
 
-<file path="src/components/TranscriptView.tsx">
-"use client";
-
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-
-interface Segment {
-  id: string;
-  idx: number;
-  start_ms: number;
-  end_ms: number;
-  text: string;
-  corrected_text?: string;
-}
-
-interface Props {
-  videoId: string;
-}
-
-export default function TranscriptView({ videoId }: Props) {
-  const [segments, setSegments] = useState<Segment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedStart, setSelectedStart] = useState<Segment | null>(null);
-  const [selectedEnd, setSelectedEnd] = useState<Segment | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const supabase = createClient();
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSignedIn(!!data.session);
-    });
-  }, [supabase]);
-
-  useEffect(() => {
-    async function fetchSegments() {
-      if (!signedIn || !videoId) return;
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("segments")
-        .select("*")
-        .eq("video_id", videoId)
-        .order("idx", { ascending: true });
-
-      if (error) {
-        setMessage(`🚨 データ取得エラー: ${error.message}`);
-      } else if (data) {
-        setSegments(data);
-      }
-      setLoading(false);
-    }
-
-    void fetchSegments();
-  }, [videoId, signedIn, supabase]);
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setAuthError(error.message);
-    else setSignedIn(true);
-  };
-
-  const handleSelectSegment = (seg: Segment) => {
-    setMessage(null);
-    if (!selectedStart || (selectedStart && selectedEnd)) {
-      setSelectedStart(seg);
-      setSelectedEnd(null);
-    } else {
-      if (seg.idx < selectedStart.idx) {
-        setSelectedStart(seg);
-        setSelectedEnd(null);
-      } else {
-        setSelectedEnd(seg);
-      }
-    }
-  };
-
-  // 全文章のコピペ
-  const handleCopyAll = () => {
-    const fullText = segments.map((s) => s.corrected_text || s.text).join("\n");
-    void navigator.clipboard.writeText(fullText);
-    setMessage("📋 文字起こしの全文をクリップボードにコピーしました！");
-  };
-
-  // 選択範囲のコピペ
-  const handleCopySelected = () => {
-    if (!selectedStart) return;
-    const startIdx = selectedStart.idx;
-    const endIdx = selectedEnd ? selectedEnd.idx : selectedStart.idx;
-    const selectedSegs = segments.filter((s) => s.idx >= startIdx && s.idx <= endIdx);
-    const selectedText = selectedSegs.map((s) => s.corrected_text || s.text).join("\n");
-
-    void navigator.clipboard.writeText(selectedText);
-    setMessage("📋 選択範囲の文章をクリップボードにコピーしました！");
-  };
-
-  const handleCreateClip = async () => {
-    if (!selectedStart) return;
-
-    const startSeg = selectedStart;
-    const endSeg = selectedEnd || selectedStart;
-
-    setIsSubmitting(true);
-    setMessage(null);
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("ログインしていません。");
-
-      const { data: clip, error: clipErr } = await supabase
-        .from("clips")
-        .insert({
-          owner_id: user.id,
-          video_id: videoId,
-          start_ms: startSeg.start_ms,
-          end_ms: endSeg.end_ms,
-          seg_from: startSeg.idx,
-          seg_to: endSeg.idx,
-          label: `${(startSeg.start_ms / 1000).toFixed(1)}s - ${(endSeg.end_ms / 1000).toFixed(1)}s`,
-          status: "pending",
-        })
-        .select("id")
-        .single();
-
-      if (clipErr) throw clipErr;
-
-      await supabase.from("ingest_jobs").insert({
-        owner_id: user.id,
-        video_id: videoId,
-        clip_id: clip.id,
-        type: "clip_encode",
-        lane: "gpu",
-        priority: 10,
-        payload: { video_id: videoId, clip_id: clip.id, start_ms: startSeg.start_ms, end_ms: endSeg.end_ms },
-      });
-
-      setMessage("🎉 クリップ切り出しジョブを送信しました！");
-      setSelectedStart(null);
-      setSelectedEnd(null);
-    } catch (err: any) {
-      setMessage(`🚨 エラー: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (signedIn === false) {
-    return (
-      <form onSubmit={handleSignIn} className="max-w-sm mx-auto p-6 space-y-4 bg-white border rounded-xl shadow-sm">
-        <h2 className="text-lg font-bold text-center">サインインが必要です</h2>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full border rounded-lg px-3 py-2 text-sm" required />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full border rounded-lg px-3 py-2 text-sm" required />
-        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">サインイン</button>
-        {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
-      </form>
-    );
-  }
-
-  if (loading || signedIn === null) {
-    return <div className="p-4 text-center text-gray-500">文字起こしを読み込み中...</div>;
-  }
-
-  const isSelected = (seg: Segment) => {
-    if (!selectedStart) return false;
-    if (!selectedEnd) return seg.idx === selectedStart.idx;
-    return seg.idx >= selectedStart.idx && seg.idx <= selectedEnd.idx;
-  };
-
-  return (
-    <div className="space-y-4 max-w-xl mx-auto p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold">Transcript (文字起こし)</h2>
-        <button onClick={handleCopyAll} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200">
-          📋 全文コピー
-        </button>
-      </div>
-
-      {selectedStart && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between gap-2">
-          <button onClick={handleCopySelected} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-100">
-            📋 選択文をコピー
-          </button>
-          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md text-sm hover:bg-blue-700 disabled:opacity-50">
-            {isSubmitting ? "送信中..." : "この区間でクリップ作成"}
-          </button>
-        </div>
-      )}
-
-      {message && <div className="p-3 bg-gray-100 rounded-lg text-xs font-mono">{message}</div>}
-
-      <div className="space-y-2 border rounded-lg p-2 bg-white max-h-[60vh] overflow-y-auto">
-        {segments.map((seg) => {
-          const active = isSelected(seg);
-          return (
-            <div
-              key={seg.id}
-              onClick={() => handleSelectSegment(seg)}
-              className={`p-3 rounded-lg border cursor-pointer transition-colors text-sm ${
-                active ? "bg-blue-100 border-blue-500 font-medium" : "hover:bg-gray-50 border-gray-200"
-              }`}
-            >
-              <div className="flex justify-between text-[10px] text-gray-400 font-mono mb-1">
-                <span>#{(seg.idx + 1).toString().padStart(2, "0")}</span>
-                <span>{(seg.start_ms / 1000).toFixed(1)}s - {(seg.end_ms / 1000).toFixed(1)}s</span>
-              </div>
-              <p className="text-gray-800 leading-relaxed">{seg.corrected_text || seg.text}</p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-</file>
-
 <file path="src/lib/supabase/client.ts">
 import { createBrowserClient } from "@supabase/ssr";
 
@@ -1000,133 +672,6 @@ v1.71.0
     "@supabase/server": "npm:@supabase/server@^1"
   }
 }
-</file>
-
-<file path="supabase/functions/sign-clip/index.ts">
-import { AwsClient } from "npm:aws4fetch@1.0.20";
-import { createClient } from "npm:@supabase/supabase-js@2.47.10";
-
-const R2_ACCOUNT_ID = Deno.env.get("R2_ACCOUNT_ID")!;
-const R2_BUCKET = Deno.env.get("R2_BUCKET") ?? "dictation";
-const SIGN_TTL_SEC = 7200; // 有効期限: 2時間
-
-const r2 = new AwsClient({
-  accessKeyId: Deno.env.get("R2_ACCESS_KEY_ID")!,
-  secretAccessKey: Deno.env.get("R2_SECRET_ACCESS_KEY")!,
-  service: "s3",
-  region: "auto",
-});
-
-const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-function corsHeaders(origin: string | null): Record<string, string> {
-  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
-  const allow = isWildcard
-    ? (origin ?? "*")
-    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
-
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers": "authorization, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
-}
-
-Deno.serve(async (req) => {
-  const origin = req.headers.get("Origin");
-  const cors = corsHeaders(origin);
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: cors });
-  }
-  if (req.method !== "POST") {
-    return new Response("method not allowed", { status: 405, headers: cors });
-  }
-
-  // 1. ユーザー認証の確認
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
-
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  // 2. 入力データの形式チェック
-  let body: { clipId?: string; kind?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "invalid json" }), {
-      status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  const clipId = body.clipId ?? "";
-  const kind = body.kind === "audio" ? "audio" : "video";
-  const uuidRe =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRe.test(clipId)) {
-    return new Response(JSON.stringify({ error: "invalid clipId" }), {
-      status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  // 3. データベースでの所有権チェック (RLS適用)
-  const { data: asset, error: dbErr } = await supabase
-    .from("clip_assets")
-    .select("r2_video_key, r2_audio_key, r2_bucket")
-    .eq("clip_id", clipId)
-    .single();
-
-  if (dbErr || !asset) {
-    return new Response(JSON.stringify({ error: "not found" }), {
-      status: 404,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  const key = kind === "audio" ? asset.r2_audio_key : asset.r2_video_key;
-  if (!key) {
-    return new Response(JSON.stringify({ error: "asset not available" }), {
-      status: 404,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  // 4. Cloudflare R2 署名付きURLの生成
-  const endpoint =
-    `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/` +
-    `${asset.r2_bucket ?? R2_BUCKET}/${key}`;
-
-  const signed = await r2.sign(
-    new Request(`${endpoint}?X-Amz-Expires=${SIGN_TTL_SEC}`, { method: "GET" }),
-    { aws: { signQuery: true, allHeaders: false } },
-  );
-
-  return new Response(
-    JSON.stringify({
-      url: signed.url,
-      kind,
-      expiresAt: Date.now() + SIGN_TTL_SEC * 1000,
-    }),
-    { headers: { ...cors, "Content-Type": "application/json" } },
-  );
-});
 </file>
 
 <file path="supabase/config.toml">
@@ -1412,8 +957,570 @@ if __name__ == "__main__":
 }
 </file>
 
+<file path="src/app/history/page.tsx">
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+
+interface Attempt {
+  id: string;
+  clip_id: string;
+  input_raw: string;
+  answer_gold: string;
+  created_at: string;
+  clips?: {
+    label: string;
+  };
+}
+
+export default function HistoryPage() {
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedSelectedIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
+
+  const supabase = createClient();
+
+  const fetchAttempts = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('attempts')
+      .select('*, clips(label)')
+      .eq('is_correct', false)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching attempts:', error);
+    } else if (data) {
+      setAttempts(data);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void fetchAttempts();
+  }, []);
+
+  // 全選択 / 解除
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedSelectedIds(attempts.map((a) => a.id));
+    } else {
+      setSelectedSelectedIds([]);
+    }
+  };
+
+  // 単一選択 / 解除
+  const handleToggleSelect = (id: string) => {
+    setSelectedSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  // 1件削除
+  const handleDeleteSingle = async (id: string) => {
+    if (!confirm('この間違い記録を削除しますか？')) return;
+    setDeleting(true);
+    await supabase.from('attempts').delete().eq('id', id);
+    setSelectedSelectedIds((prev) => prev.filter((i) => i !== id));
+    await fetchAttempts();
+    setDeleting(false);
+  };
+
+  // 選択した項目を一括削除
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`選択した ${selectedIds.length} 件の間違い記録を削除しますか？`)) return;
+
+    setDeleting(true);
+    await supabase.from('attempts').delete().in('id', selectedIds);
+    setSelectedSelectedIds([]);
+    await fetchAttempts();
+    setDeleting(false);
+  };
+
+  const handlePrintPdf = () => {
+    window.print();
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-8 print:bg-white print:py-0">
+      <div className="max-w-3xl mx-auto px-4 space-y-6">
+        
+        {/* ヘッダー領域 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3 print:hidden">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">📝 間違いノート・学習履歴</h1>
+            <p className="text-xs text-gray-500 mt-1">苦手な単語や文法のログを管理・削除できます</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handlePrintPdf}
+              className="px-3.5 py-2 bg-green-600 text-white font-bold text-xs rounded-lg hover:bg-green-700 shadow-sm transition-colors"
+            >
+              📄 PDFを印刷 / 出力
+            </button>
+            <Link
+              href="/"
+              className="px-3.5 py-2 bg-gray-200 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              ← ダッシュボード
+            </Link>
+          </div>
+        </div>
+
+        {/* 印刷/PDF専用ヘッダー */}
+        <div className="hidden print:block border-b pb-2 mb-4">
+          <h1 className="text-2xl font-bold text-black">Dictation App - 間違いデータ分析レポート</h1>
+          <p className="text-xs text-gray-500">出力日時: {new Date().toLocaleString()}</p>
+        </div>
+
+        {/* 一括操作バー */}
+        {!loading && attempts.length > 0 && (
+          <div className="flex items-center justify-between bg-white p-3 border rounded-xl shadow-sm print:hidden">
+            <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedIds.length === attempts.length && attempts.length > 0}
+                onChange={handleSelectAll}
+                className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+              />
+              すべて選択 ({selectedIds.length} / {attempts.length} 件)
+            </label>
+
+            <button
+              onClick={handleDeleteSelected}
+              disabled={selectedIds.length === 0 || deleting}
+              className="px-3.5 py-1.5 bg-red-600 text-white font-bold text-xs rounded-lg hover:bg-red-700 disabled:opacity-40 transition-colors flex items-center gap-1"
+            >
+              🗑️ 選択した項目を削除
+            </button>
+          </div>
+        )}
+
+        {/* 一覧カード */}
+        {loading ? (
+          <p className="text-xs text-gray-500 text-center py-8">履歴を読み込み中...</p>
+        ) : attempts.length === 0 ? (
+          <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+            間違えた問題の記録はありません！素晴らしいです。
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {attempts.map((att) => {
+              const isChecked = selectedIds.includes(att.id);
+              return (
+                <div
+                  key={att.id}
+                  className={`p-4 bg-white border rounded-xl shadow-sm space-y-2.5 transition-all print:border-gray-300 print:shadow-none ${
+                    isChecked ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50/20' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between border-b pb-2 text-xs text-gray-400 font-mono">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleSelect(att.id)}
+                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer print:hidden"
+                      />
+                      <span>📅 {new Date(att.created_at).toLocaleString()}</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 print:hidden">
+                      <Link
+                        href={`/clips/${att.clip_id}`}
+                        className="text-blue-600 font-bold hover:underline"
+                      >
+                        {att.clips?.label || 'クリップを開く'} ➔
+                      </Link>
+                      <button
+                        onClick={() => handleDeleteSingle(att.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="削除"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm font-mono pt-1">
+                    <div className="bg-red-50 p-2.5 rounded-lg border border-red-100">
+                      <span className="text-[10px] text-red-500 block font-bold mb-0.5">あなたの回答:</span>
+                      <span className="font-bold text-red-800 break-all">
+                        {att.input_raw || '（未入力）'}
+                      </span>
+                    </div>
+                    <div className="bg-green-50 p-2.5 rounded-lg border border-green-100">
+                      <span className="text-[10px] text-green-600 block font-bold mb-0.5">正解:</span>
+                      <span className="font-bold text-green-800 break-all">{att.answer_gold}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+      </div>
+    </main>
+  );
+}
+</file>
+
+<file path="src/components/TranscriptView.tsx">
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+interface Segment {
+  id: string;
+  idx: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  corrected_text?: string;
+}
+
+interface Props {
+  videoId: string;
+}
+
+export default function TranscriptView({ videoId }: Props) {
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedStart, setSelectedStart] = useState<Segment | null>(null);
+  const [selectedEnd, setSelectedEnd] = useState<Segment | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSignedIn(!!data.session);
+    });
+  }, [supabase]);
+
+  useEffect(() => {
+    async function fetchSegments() {
+      if (!signedIn || !videoId) return;
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("segments")
+        .select("*")
+        .eq("video_id", videoId)
+        .order("idx", { ascending: true });
+
+      if (error) {
+        setMessage(`🚨 データ取得エラー: ${error.message}`);
+      } else if (data) {
+        setSegments(data);
+      }
+      setLoading(false);
+    }
+
+    void fetchSegments();
+  }, [videoId, signedIn, supabase]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    else setSignedIn(true);
+  };
+
+  const handleSelectSegment = (seg: Segment) => {
+    setMessage(null);
+    if (!selectedStart || (selectedStart && selectedEnd)) {
+      setSelectedStart(seg);
+      setSelectedEnd(null);
+    } else {
+      if (seg.idx < selectedStart.idx) {
+        setSelectedStart(seg);
+        setSelectedEnd(null);
+      } else {
+        setSelectedEnd(seg);
+      }
+    }
+  };
+
+  // 全文章のコピペ
+  const handleCopyAll = () => {
+    const fullText = segments.map((s) => s.corrected_text || s.text).join("\n");
+    void navigator.clipboard.writeText(fullText);
+    setMessage("📋 文字起こしの全文をクリップボードにコピーしました！");
+  };
+
+  // 選択範囲のコピペ
+  const handleCopySelected = () => {
+    if (!selectedStart) return;
+    const startIdx = selectedStart.idx;
+    const endIdx = selectedEnd ? selectedEnd.idx : selectedStart.idx;
+    const selectedSegs = segments.filter((s) => s.idx >= startIdx && s.idx <= endIdx);
+    const selectedText = selectedSegs.map((s) => s.corrected_text || s.text).join("\n");
+
+    void navigator.clipboard.writeText(selectedText);
+    setMessage("📋 選択範囲の文章をクリップボードにコピーしました！");
+  };
+
+  const handleCreateClip = async () => {
+    if (!selectedStart) return;
+
+    const startSeg = selectedStart;
+    const endSeg = selectedEnd || selectedStart;
+
+    setIsSubmitting(true);
+    setMessage(null);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("ログインしていません。");
+
+      const { data: clip, error: clipErr } = await supabase
+        .from("clips")
+        .insert({
+          owner_id: user.id,
+          video_id: videoId,
+          start_ms: startSeg.start_ms,
+          end_ms: endSeg.end_ms,
+          seg_from: startSeg.idx,
+          seg_to: endSeg.idx,
+          label: `${(startSeg.start_ms / 1000).toFixed(1)}s - ${(endSeg.end_ms / 1000).toFixed(1)}s`,
+          status: "pending",
+        })
+        .select("id")
+        .single();
+
+      if (clipErr) throw clipErr;
+
+      await supabase.from("ingest_jobs").insert({
+        owner_id: user.id,
+        video_id: videoId,
+        clip_id: clip.id,
+        type: "clip_encode",
+        lane: "gpu",
+        priority: 10,
+        payload: { video_id: videoId, clip_id: clip.id, start_ms: startSeg.start_ms, end_ms: endSeg.end_ms },
+      });
+
+      setMessage("🎉 クリップ切り出しジョブを送信しました！");
+      setSelectedStart(null);
+      setSelectedEnd(null);
+    } catch (err: any) {
+      setMessage(`🚨 エラー: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (signedIn === false) {
+    return (
+      <form onSubmit={handleSignIn} className="max-w-sm mx-auto p-6 space-y-4 bg-white border rounded-xl shadow-sm">
+        <h2 className="text-lg font-bold text-center">サインインが必要です</h2>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">サインイン</button>
+        {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
+      </form>
+    );
+  }
+
+  if (loading || signedIn === null) {
+    return <div className="p-4 text-center text-gray-500">文字起こしを読み込み中...</div>;
+  }
+
+  const isSelected = (seg: Segment) => {
+    if (!selectedStart) return false;
+    if (!selectedEnd) return seg.idx === selectedStart.idx;
+    return seg.idx >= selectedStart.idx && seg.idx <= selectedEnd.idx;
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl mx-auto p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold">Transcript (文字起こし)</h2>
+        <button onClick={handleCopyAll} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200">
+          📋 全文コピー
+        </button>
+      </div>
+
+      {selectedStart && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between gap-2">
+          <button onClick={handleCopySelected} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-100">
+            📋 選択文をコピー
+          </button>
+          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md text-sm hover:bg-blue-700 disabled:opacity-50">
+            {isSubmitting ? "送信中..." : "この区間でクリップ作成"}
+          </button>
+        </div>
+      )}
+
+      {message && <div className="p-3 bg-gray-100 rounded-lg text-xs font-mono">{message}</div>}
+
+      <div className="space-y-2 border rounded-lg p-2 bg-white max-h-[60vh] overflow-y-auto">
+        {segments.map((seg) => {
+          const active = isSelected(seg);
+          return (
+            <div
+              key={seg.id}
+              onClick={() => handleSelectSegment(seg)}
+              className={`p-3 rounded-lg border cursor-pointer transition-colors text-sm ${
+                active ? "bg-blue-100 border-blue-500 font-medium" : "hover:bg-gray-50 border-gray-200"
+              }`}
+            >
+              <div className="flex justify-between text-[10px] text-gray-400 font-mono mb-1">
+                <span>#{(seg.idx + 1).toString().padStart(2, "0")}</span>
+                <span>{(seg.start_ms / 1000).toFixed(1)}s - {(seg.end_ms / 1000).toFixed(1)}s</span>
+              </div>
+              <p className="text-gray-800 leading-relaxed">{seg.corrected_text || seg.text}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="supabase/.temp/cli-latest">
 v2.116.0
+</file>
+
+<file path="supabase/functions/sign-clip/index.ts">
+import { AwsClient } from "npm:aws4fetch@1.0.20";
+import { createClient } from "npm:@supabase/supabase-js@2.47.10";
+
+const R2_ACCOUNT_ID = Deno.env.get("R2_ACCOUNT_ID")!;
+const R2_BUCKET = Deno.env.get("R2_BUCKET") ?? "dictation";
+const SIGN_TTL_SEC = 7200; // 有効期限: 2時間
+
+const r2 = new AwsClient({
+  accessKeyId: Deno.env.get("R2_ACCESS_KEY_ID")!,
+  secretAccessKey: Deno.env.get("R2_SECRET_ACCESS_KEY")!,
+  service: "s3",
+  region: "auto",
+});
+
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
+  const allow = isWildcard
+    ? (origin ?? "*")
+    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
+
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+}
+
+Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const cors = corsHeaders(origin);
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+  if (req.method !== "POST") {
+    return new Response("method not allowed", { status: 405, headers: cors });
+  }
+
+  // 1. ユーザー認証の確認
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 2. 入力データの形式チェック
+  let body: { clipId?: string; kind?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "invalid json" }), {
+      status: 400,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const clipId = body.clipId ?? "";
+  const kind = body.kind === "audio" ? "audio" : "video";
+  const uuidRe =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRe.test(clipId)) {
+    return new Response(JSON.stringify({ error: "invalid clipId" }), {
+      status: 400,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 3. データベースでの所有権チェック (RLS適用)
+  const { data: asset, error: dbErr } = await supabase
+    .from("clip_assets")
+    .select("r2_video_key, r2_audio_key, r2_bucket")
+    .eq("clip_id", clipId)
+    .single();
+
+  if (dbErr || !asset) {
+    return new Response(JSON.stringify({ error: "not found" }), {
+      status: 404,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const key = kind === "audio" ? asset.r2_audio_key : asset.r2_video_key;
+  if (!key) {
+    return new Response(JSON.stringify({ error: "asset not available" }), {
+      status: 404,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 4. Cloudflare R2 署名付きURLの生成
+  const endpoint =
+    `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/` +
+    `${asset.r2_bucket ?? R2_BUCKET}/${key}`;
+
+  const signed = await r2.sign(
+    new Request(`${endpoint}?X-Amz-Expires=${SIGN_TTL_SEC}`, { method: "GET" }),
+    { aws: { signQuery: true, allHeaders: false } },
+  );
+
+  return new Response(
+    JSON.stringify({
+      url: signed.url,
+      kind,
+      expiresAt: Date.now() + SIGN_TTL_SEC * 1000,
+    }),
+    { headers: { ...cors, "Content-Type": "application/json" } },
+  );
+});
 </file>
 
 <file path="next.config.ts">
@@ -1928,9 +2035,13 @@ export default function ClipPage() {
   const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // アクティブな文章（インデックス）
+  const [activeSegIndex, setActiveSegIndex] = useState(0);
+
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
   const [checkedSegments, setCheckedSegments] = useState<Record<string, boolean>>({});
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
@@ -1977,12 +2088,45 @@ export default function ClipPage() {
     fetchData();
   }, [id]);
 
+  // 動画再生時間の変化に伴い、フォーカスカードを自動切り替え
+  useEffect(() => {
+    if (segments.length === 0) return;
+    const foundIdx = segments.findIndex((seg) => {
+      const startSec = (seg.start_ms || 0) / 1000;
+      const endSec = (seg.end_ms || 0) / 1000;
+      return currentVideoTime >= startSec && currentVideoTime <= endSec;
+    });
+
+    if (foundIdx !== -1 && foundIdx !== activeSegIndex) {
+      setActiveSegIndex(foundIdx);
+    }
+  }, [currentVideoTime, segments]);
+
   const handleInputChange = (key: string, value: string) => {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
   };
 
-  // 単一セグメント（文章）ごとの採点 & DB保存
+  const handlePrevSegment = () => {
+    if (activeSegIndex > 0) {
+      const newIdx = activeSegIndex - 1;
+      setActiveSegIndex(newIdx);
+      setSeekToTime(segments[newIdx].start_ms / 1000);
+      setSaveMessage(null);
+    }
+  };
+
+  const handleNextSegment = () => {
+    if (activeSegIndex < segments.length - 1) {
+      const newIdx = activeSegIndex + 1;
+      setActiveSegIndex(newIdx);
+      setSeekToTime(segments[newIdx].start_ms / 1000);
+      setSaveMessage(null);
+    }
+  };
+
+  // 単一セグメント採点
   const checkSingleSegment = async (segId: string) => {
+    setSaveMessage(null);
     const seg = segments.find((s) => s.id === segId);
     if (!seg) return;
 
@@ -1990,7 +2134,7 @@ export default function ClipPage() {
     const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
     const newResults = { ...results };
 
-    const { data: { user } } = await supabase.auth.getUser();
+    let wrongCount = 0;
 
     for (let wIdx = 0; wIdx < words.length; wIdx++) {
       const word = words[wIdx];
@@ -2002,28 +2146,63 @@ export default function ClipPage() {
       const gold = targetAnswer.trim().toLowerCase();
       const isCorrect = userInput === gold;
 
-      newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+      if (!isCorrect) wrongCount++;
 
-      // DBに試行履歴/間違いデータを非同期保存
-      if (user) {
+      newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+    }
+
+    setResults(newResults);
+    setCheckedSegments((prev) => ({ ...prev, [segId]: true }));
+
+    // 間違いがあれば自動保存を実行
+    if (wrongCount > 0) {
+      await saveMistakesToDb(segId, newResults);
+    }
+  };
+
+  // 間違いをDBに保存する処理
+  const saveMistakesToDb = async (segId: string, currentResults = results) => {
+    const seg = segments.find((s) => s.id === segId);
+    if (!seg) return;
+
+    const words = (seg.corrected_text || seg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setSaveMessage('🚨 ログインが必要です');
+      return;
+    }
+
+    let savedCount = 0;
+
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const key = `${seg.id}-${wIdx}`;
+      const res = currentResults[key];
+
+      if (res && !res.isCorrect) {
+        const item = segItems.find((it) => it.word_from === wIdx);
         await supabase.from('attempts').insert({
           owner_id: user.id,
           clip_id: id,
           segment_id: seg.id,
           item_id: item?.id || null,
           input_raw: userAnswers[key] || '',
-          answer_gold: targetAnswer,
-          score: isCorrect ? 1.0 : 0.0,
-          is_correct: isCorrect,
+          answer_gold: res.answer,
+          score: 0.0,
+          is_correct: false,
         });
+        savedCount++;
       }
     }
 
-    setResults(newResults);
-    setCheckedSegments((prev) => ({ ...prev, [segId]: true }));
+    if (savedCount > 0) {
+      setSaveMessage(`💾 ${savedCount} 件の間違いをノートに保存しました！`);
+    } else {
+      setSaveMessage('🎉 全問正解です！保存する間違いはありません。');
+    }
   };
 
-  // クリップ全体一括チェック
   const handleCheckAllAnswers = async () => {
     for (const seg of segments) {
       await checkSingleSegment(seg.id);
@@ -2031,6 +2210,8 @@ export default function ClipPage() {
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
+
+  const currentSeg = segments[activeSegIndex];
 
   return (
     <main className="min-h-screen bg-gray-50 py-8">
@@ -2045,6 +2226,7 @@ export default function ClipPage() {
           </Link>
         </div>
 
+        {/* 1. プレイヤー領域 */}
         {signedUrl ? (
           <ClipPlayer
             src={signedUrl}
@@ -2057,115 +2239,166 @@ export default function ClipPage() {
           </div>
         )}
 
-        <div className="bg-white border rounded-xl p-5 space-y-5 shadow-sm">
-          <h2 className="text-base font-bold text-gray-800 border-b pb-2">
-            ディクテーション穴埋め問題
-          </h2>
+        {/* 2. フォーカス学習カード */}
+        {currentSeg && (
+          <div className="bg-white border-2 border-blue-500 rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="bg-blue-600 text-white font-mono text-xs font-bold px-2.5 py-0.5 rounded-full">
+                  #{ (activeSegIndex + 1).toString().padStart(2, '0') } / { segments.length }
+                </span>
+                <span className="text-xs text-gray-400 font-mono">
+                  ({ ((currentSeg.start_ms || 0) / 1000).toFixed(1) }s - { ((currentSeg.end_ms || 0) / 1000).toFixed(1) }s)
+                </span>
+              </div>
 
-          <div className="space-y-4">
-            {segments.map((seg) => {
-              const words = (seg.corrected_text || seg.text).split(' ');
-              const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
-              
-              // 現在再生中の文かどうか判定
-              const startSec = (seg.start_ms || 0) / 1000;
-              const endSec = (seg.end_ms || 0) / 1000;
-              const isActive = currentVideoTime >= startSec && currentVideoTime <= endSec;
-              const isChecked = checkedSegments[seg.id];
+              <button
+                onClick={() => setSeekToTime(currentSeg.start_ms / 1000)}
+                className="px-2.5 py-1 bg-blue-50 text-blue-700 font-bold rounded-lg text-xs hover:bg-blue-100 transition-colors flex items-center gap-1"
+              >
+                ▶️ この文を再生
+              </button>
+            </div>
 
+            {/* 穴埋め入力エリア */}
+            <div className="flex flex-wrap gap-2 items-center font-mono py-2 min-h-[60px]">
+              { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
+                const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+                const key = `${currentSeg.id}-${wIdx}`;
+                const item = segItems.find((it) => it.word_from === wIdx);
+                const res = results[key];
+
+                const isTarget = segItems.length > 0 ? !!item : true;
+
+                if (isTarget) {
+                  return (
+                    <div key={wIdx} className="inline-flex flex-col items-center">
+                      <input
+                        type="text"
+                        value={userAnswers[key] || ''}
+                        onChange={(e) => handleInputChange(key, e.target.value)}
+                        placeholder="---"
+                        className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
+                          res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
+                        }`}
+                      />
+                      {res && (
+                        <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                          {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <span key={wIdx} className="text-sm font-bold text-gray-800">
+                    {word}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* 保存メッセージ */}
+            {saveMessage && (
+              <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-800 text-xs font-bold rounded-lg text-center">
+                {saveMessage}
+              </div>
+            )}
+
+            {/* コントロール（前後ボタン & 回答チェック & 保存） */}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t">
+              <button
+                disabled={activeSegIndex === 0}
+                onClick={handlePrevSegment}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ⬅️ 前の文
+              </button>
+
+              <div className="flex gap-1">
+                <button
+                  onClick={() => checkSingleSegment(currentSeg.id)}
+                  className="px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
+                >
+                  この文章をチェック
+                </button>
+
+                {checkedSegments[currentSeg.id] && (
+                  <button
+                    onClick={() => saveMistakesToDb(currentSeg.id)}
+                    className="px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm"
+                  >
+                    💾 間違いを保存
+                  </button>
+                )}
+              </div>
+
+              <button
+                disabled={activeSegIndex === segments.length - 1}
+                onClick={handleNextSegment}
+                className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                次の文 ➡️
+              </button>
+            </div>
+
+            {/* 解説・日本語訳 */}
+            {checkedSegments[currentSeg.id] && (
+              <div className="space-y-2 pt-3 border-t border-dashed">
+                {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
+                  <div className="space-y-1">
+                    {currentSeg.skeletons.map((sk, idx) => (
+                      <div key={idx} className="text-xs bg-blue-50 text-blue-800 p-2 rounded-lg font-semibold">
+                        💡 構文: <strong>{sk.text}</strong> ({sk.label})
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {currentSeg.ja_text && (
+                  <div className="text-xs bg-gray-50 text-gray-700 p-2 rounded-lg">
+                    💡 <strong>訳:</strong> {currentSeg.ja_text}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. 全文章リスト */}
+        <div className="bg-white border rounded-xl p-5 space-y-4 shadow-sm">
+          <div className="flex justify-between items-center border-b pb-2">
+            <h2 className="text-sm font-bold text-gray-800">全文章リスト ({segments.length}文)</h2>
+            <button
+              onClick={handleCheckAllAnswers}
+              className="px-3 py-1.5 bg-green-600 text-white rounded-lg font-bold text-xs hover:bg-green-700 shadow-sm"
+            >
+              全体を一括チェック
+            </button>
+          </div>
+
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {segments.map((seg, idx) => {
+              const isCurrent = idx === activeSegIndex;
               return (
                 <div
                   key={seg.id}
-                  className={`p-4 border rounded-xl transition-all space-y-3 ${
-                    isActive ? 'border-blue-500 bg-blue-50/40 ring-2 ring-blue-200 shadow-md' : 'bg-gray-50 border-gray-200'
+                  onClick={() => {
+                    setActiveSegIndex(idx);
+                    setSeekToTime(seg.start_ms / 1000);
+                    setSaveMessage(null);
+                  }}
+                  className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-colors flex justify-between items-center ${
+                    isCurrent ? 'bg-blue-50 border-blue-500 font-bold text-blue-900' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
                   }`}
                 >
-                  <div className="flex justify-between items-center text-xs text-gray-400 font-mono">
-                    <span className={isActive ? 'font-bold text-blue-600' : ''}>
-                      #{ (seg.idx + 1).toString().padStart(2, '0') } ({startSec.toFixed(1)}s - {endSec.toFixed(1)}s)
-                    </span>
-                    <button
-                      onClick={() => setSeekToTime(startSec)}
-                      className="px-2 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] hover:bg-blue-200 transition-colors"
-                    >
-                      ▶️ ここから再生
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 items-center font-mono">
-                    {words.map((word, wIdx) => {
-                      const key = `${seg.id}-${wIdx}`;
-                      const item = segItems.find((it) => it.word_from === wIdx);
-                      const res = results[key];
-
-                      const isTarget = segItems.length > 0 ? !!item : true;
-
-                      if (isTarget) {
-                        return (
-                          <div key={wIdx} className="inline-flex flex-col items-center">
-                            <input
-                              type="text"
-                              value={userAnswers[key] || ''}
-                              onChange={(e) => handleInputChange(key, e.target.value)}
-                              placeholder="---"
-                              className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
-                                res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
-                              }`}
-                            />
-                            {res && (
-                              <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-                                {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <span key={wIdx} className="text-sm font-bold text-gray-800">
-                          {word}
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  {/* この文章単体の回答チェックボタン */}
-                  <div className="flex justify-end pt-2 border-t border-gray-200/60">
-                    <button
-                      onClick={() => checkSingleSegment(seg.id)}
-                      className="px-3 py-1.5 bg-gray-800 text-white rounded-lg text-xs font-bold hover:bg-gray-900"
-                    >
-                      この文章をチェック
-                    </button>
-                  </div>
-
-                  {/* チェック後にのみ表示される構文と日本語訳 */}
-                  {isChecked && seg.skeletons && seg.skeletons.length > 0 && (
-                    <div className="space-y-1 pt-1">
-                      {seg.skeletons.map((sk, idx) => (
-                        <div key={idx} className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded font-semibold">
-                          💡 構文: <strong>{sk.text}</strong> ({sk.label})
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {isChecked && seg.ja_text && (
-                    <div className="text-xs text-gray-600 pt-1">
-                      💡 <strong>訳:</strong> {seg.ja_text}
-                    </div>
-                  )}
+                  <span className="font-mono">#{ (idx + 1).toString().padStart(2, '0') }</span>
+                  <span className="truncate max-w-[280px] font-mono">{ seg.corrected_text || seg.text }</span>
+                  <span className="text-[10px] text-gray-400 font-mono">{ ((seg.start_ms || 0) / 1000).toFixed(1) }s</span>
                 </div>
               );
             })}
           </div>
-
-          <button
-            onClick={handleCheckAllAnswers}
-            className="w-full py-3 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 shadow-md transition-colors"
-          >
-            全体を一括チェックする
-          </button>
         </div>
 
       </div>
