@@ -19,6 +19,9 @@ interface Clip {
   status: string;
   video_id: string;
   created_at: string;
+  difficulty_score?: number | null;
+  difficulty_tier?: string | null;
+  effective_wpm?: number | null;
   videos?: {
     youtube_id: string;
     title: string;
@@ -60,13 +63,11 @@ export default function DashboardPage() {
     if (!signedIn) return;
     setLoading(true);
 
-    // 1. 初期オーブ処理・残高の呼び出し
     const { data: orbRes, error: orbErr } = await supabase.rpc("ensure_initial_orbs");
     if (!orbErr && orbRes !== null) {
       setOrbCount(orbRes);
     }
 
-    // 2. 動画一覧の取得
     const { data: vData } = await supabase
       .from("videos")
       .select("id, youtube_id, title, status, created_at")
@@ -74,7 +75,6 @@ export default function DashboardPage() {
 
     if (vData) setVideos(vData);
 
-    // 3. クリップ一覧の取得
     const { data: cData } = await supabase
       .from("clips")
       .select("*, videos(youtube_id, title)")
@@ -82,7 +82,6 @@ export default function DashboardPage() {
 
     if (cData) setClips(cData);
 
-    // 4. ストレージ使用量取得
     const { data: assetData } = await supabase
       .from("clip_assets")
       .select("video_bytes");
@@ -181,6 +180,17 @@ export default function DashboardPage() {
     void fetchData();
   };
 
+  const getTierBadgeStyle = (tier?: string | null) => {
+    switch (tier) {
+      case "初級": return "bg-green-100 text-green-800 border-green-300";
+      case "中級": return "bg-blue-100 text-blue-800 border-blue-300";
+      case "上級": return "bg-amber-100 text-amber-800 border-amber-300";
+      case "超上級": return "bg-purple-100 text-purple-800 border-purple-300";
+      case "超絶": return "bg-red-100 text-red-800 border-red-300";
+      default: return "bg-gray-100 text-gray-700 border-gray-300";
+    }
+  };
+
   if (signedIn === false) {
     return (
       <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-12 p-6 space-y-4 bg-white border rounded-xl shadow-sm">
@@ -199,7 +209,8 @@ export default function DashboardPage() {
     const q = searchQuery.toLowerCase();
     const labelMatch = (c.label || "").toLowerCase().includes(q);
     const tagMatch = (c.tags || []).some((t) => t.toLowerCase().includes(q));
-    return labelMatch || tagMatch;
+    const tierMatch = (c.difficulty_tier || "").toLowerCase().includes(q);
+    return labelMatch || tagMatch || tierMatch;
   });
 
   const filteredVideos = videos.filter((v) =>
@@ -220,7 +231,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-4 text-right">
-            {/* ★ 新機能：オーブ表示 */}
             <div className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-1.5">
               <span className="text-base">💎</span>
               <div className="text-left">
@@ -244,7 +254,7 @@ export default function DashboardPage() {
               type="text"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
+              placeholder="[https://www.youtube.com/watch?v=](https://www.youtube.com/watch?v=)..."
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
               required
             />
@@ -261,7 +271,7 @@ export default function DashboardPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="🔍 題名やタグで検索..."
+            placeholder="🔍 題名、タグ、難易度（初級、上級など）で検索..."
             className="w-full border bg-white rounded-xl px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-500"
           />
 
@@ -298,18 +308,24 @@ export default function DashboardPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 {filteredClips.map((clip) => {
                   const ytId = clip.videos?.youtube_id;
-                  const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
+                  const thumbUrl = ytId ? `[https://img.youtube.com/vi/$](https://img.youtube.com/vi/$){ytId}/hqdefault.jpg` : null;
 
                   return (
                     <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
                       {thumbUrl && (
                         <div className="aspect-video bg-black relative">
                           <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                          {/* ★ 難易度バッジ表示 */}
+                          {clip.difficulty_tier && (
+                            <span className={`absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-sm ${getTierBadgeStyle(clip.difficulty_tier)}`}>
+                              {clip.difficulty_tier} (Score: {clip.difficulty_score ?? 0})
+                            </span>
+                          )}
                         </div>
                       )}
 
                       <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="flex justify-between items-start">
                             <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600 line-clamp-1">
                               {clip.label || "無題のクリップ"}
@@ -333,6 +349,13 @@ export default function DashboardPage() {
                               </button>
                             </div>
                           </div>
+
+                          {/* WPM情報表示 */}
+                          {clip.effective_wpm && (
+                            <div className="text-[10px] text-gray-500 font-mono">
+                              実効WPM: {clip.effective_wpm}
+                            </div>
+                          )}
 
                           {clip.tags && clip.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1">
@@ -376,7 +399,7 @@ export default function DashboardPage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {filteredVideos.map((video) => {
-                  const thumbUrl = video.youtube_id ? `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg` : null;
+                  const thumbUrl = video.youtube_id ? `[https://img.youtube.com/vi/$](https://img.youtube.com/vi/$){video.youtube_id}/hqdefault.jpg` : null;
 
                   return (
                     <Link
