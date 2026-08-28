@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import GachaModal from "@/components/GachaModal";
 
 interface Video {
   id: string;
@@ -50,6 +51,9 @@ export default function DashboardPage() {
   const [editingClip, setEditingClip] = useState<Clip | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editTags, setEditTags] = useState("");
+
+  // ガチャモーダル表示フラグ
+  const [isGachaOpen, setIsGachaOpen] = useState(false);
 
   const supabase = createClient();
 
@@ -222,15 +226,30 @@ export default function DashboardPage() {
       <div className="max-w-3xl mx-auto px-4 space-y-6">
         
         {/* ヘッダー領域 */}
-        <div className="flex justify-between items-center border-b pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3">
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
-            <Link href="/history" className="inline-block mt-1 text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
-              📝 間違いノート・履歴を開く ➔
-            </Link>
+            <div className="flex items-center gap-2 mt-1">
+              <Link href="/history" className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
+                📝 間違いノート ➔
+              </Link>
+              {/* ガチャ・図鑑へのボタン */}
+              <button
+                onClick={() => setIsGachaOpen(true)}
+                className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1"
+              >
+                🔮 召喚 (ガチャ)
+              </button>
+              <Link
+                href="/monsters"
+                className="px-2.5 py-1 bg-gray-800 text-gray-200 text-xs font-bold rounded hover:bg-gray-700 transition-colors"
+              >
+                📖 図鑑
+              </Link>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 text-right">
+          <div className="flex items-center gap-4 text-right self-end sm:self-auto">
             <div className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-1.5">
               <span className="text-base">💎</span>
               <div className="text-left">
@@ -254,7 +273,7 @@ export default function DashboardPage() {
               type="text"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="[https://www.youtube.com/watch?v=](https://www.youtube.com/watch?v=)..."
+              placeholder="https://www.youtube.com/watch?v=..."
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
               required
             />
@@ -308,14 +327,13 @@ export default function DashboardPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 {filteredClips.map((clip) => {
                   const ytId = clip.videos?.youtube_id;
-                  const thumbUrl = ytId ? `[https://img.youtube.com/vi/$](https://img.youtube.com/vi/$){ytId}/hqdefault.jpg` : null;
+                  const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
 
                   return (
                     <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
                       {thumbUrl && (
                         <div className="aspect-video bg-black relative">
                           <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
-                          {/* ★ 難易度バッジ表示 */}
                           {clip.difficulty_tier && (
                             <span className={`absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-sm ${getTierBadgeStyle(clip.difficulty_tier)}`}>
                               {clip.difficulty_tier} (Score: {clip.difficulty_score ?? 0})
@@ -350,7 +368,6 @@ export default function DashboardPage() {
                             </div>
                           </div>
 
-                          {/* WPM情報表示 */}
                           {clip.effective_wpm && (
                             <div className="text-[10px] text-gray-500 font-mono">
                               実効WPM: {clip.effective_wpm}
@@ -399,7 +416,7 @@ export default function DashboardPage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {filteredVideos.map((video) => {
-                  const thumbUrl = video.youtube_id ? `[https://img.youtube.com/vi/$](https://img.youtube.com/vi/$){video.youtube_id}/hqdefault.jpg` : null;
+                  const thumbUrl = video.youtube_id ? `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg` : null;
 
                   return (
                     <Link
@@ -459,6 +476,14 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* ガチャモーダル表示 */}
+        <GachaModal
+          isOpen={isGachaOpen}
+          onClose={() => setIsGachaOpen(false)}
+          onSuccess={() => void fetchData()}
+          orbCount={orbCount}
+        />
 
       </div>
     </main>
