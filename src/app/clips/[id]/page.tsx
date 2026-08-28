@@ -27,18 +27,25 @@ interface ClozeItem {
   variants: string[];
 }
 
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  image_url: string;
+}
+
 export default function ClipPage() {
   const params = useParams();
   const id = params?.id as string;
 
   const [clip, setClip] = useState<any>(null);
+  const [monster, setMonster] = useState<Monster | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // アクティブな文章（インデックス）
   const [activeSegIndex, setActiveSegIndex] = useState(0);
-
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
   const [checkedSegments, setCheckedSegments] = useState<Record<string, boolean>>({});
@@ -46,6 +53,16 @@ export default function ClipPage() {
 
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
+
+  // ドロップ結果モーダル用ステート
+  const [dropResult, setDropResult] = useState<{
+    isDropped: boolean;
+    dropRateUsed: number;
+    monster: Monster;
+    newLuck: number;
+    isFirstClear: boolean;
+  } | null>(null);
+  const [isSubmittingSession, setIsSubmittingSession] = useState(false);
 
   const { url: signedUrl } = useSignedUrl(id, 'video');
   const supabase = createClient();
@@ -58,12 +75,15 @@ export default function ClipPage() {
 
       const { data: clipData } = await supabase
         .from('clips')
-        .select('*, videos(youtube_id, title)')
+        .select('*, videos(youtube_id, title), monsters(*)')
         .eq('id', id)
         .maybeSingle();
 
       if (clipData) {
         setClip(clipData);
+        if (clipData.monsters) {
+          setMonster(clipData.monsters);
+        }
 
         const { data: segData } = await supabase
           .from('segments')
@@ -89,7 +109,6 @@ export default function ClipPage() {
     fetchData();
   }, [id]);
 
-  // 動画再生時間の変化に伴い、フォーカスカードを自動切り替え
   useEffect(() => {
     if (segments.length === 0) return;
     const foundIdx = segments.findIndex((seg) => {
@@ -125,7 +144,6 @@ export default function ClipPage() {
     }
   };
 
-  // 単一セグメント採点
   const checkSingleSegment = async (segId: string) => {
     setSaveMessage(null);
     const seg = segments.find((s) => s.id === segId);
@@ -155,13 +173,11 @@ export default function ClipPage() {
     setResults(newResults);
     setCheckedSegments((prev) => ({ ...prev, [segId]: true }));
 
-    // 間違いがあれば自動保存を実行
     if (wrongCount > 0) {
       await saveMistakesToDb(segId, newResults);
     }
   };
 
-  // 間違いをDBに保存する処理
   const saveMistakesToDb = async (segId: string, currentResults = results) => {
     const seg = segments.find((s) => s.id === segId);
     if (!seg) return;
@@ -204,9 +220,70 @@ export default function ClipPage() {
     }
   };
 
+  // 全体チェック ＆ ドロップ判定リクエスト
   const handleCheckAllAnswers = async () => {
+    setIsSubmittingSession(true);
+
+    let totalTargetCount = 0;
+    let totalCorrectCount = 0;
+    let filledCount = 0;
+
     for (const seg of segments) {
+      const words = (seg.corrected_text || seg.text).split(' ');
+      const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const word = words[wIdx];
+        const key = `${seg.id}-${wIdx}`;
+        const item = segItems.find((it) => it.word_from === wIdx);
+
+        const isTarget = segItems.length > 0 ? !!item : true;
+
+        if (isTarget) {
+          totalTargetCount++;
+          const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+          const userInput = (userAnswers[key] || '').trim().toLowerCase();
+          if (userInput !== '') filledCount++;
+
+          if (userInput === targetAnswer.trim().toLowerCase()) {
+            totalCorrectCount++;
+          }
+        }
+      }
       await checkSingleSegment(seg.id);
+    }
+
+    const rawAccuracy = totalTargetCount > 0 ? (totalCorrectCount / totalTargetCount) * 100 : 0;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/drop`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              clipId: id,
+              rawAccuracy: Math.round(rawAccuracy),
+              blankTotal: totalTargetCount,
+              blankFilled: filledCount,
+            }),
+          }
+        );
+
+        const data = await res.json();
+        if (res.ok) {
+          setDropResult(data);
+        }
+      }
+    } catch (err) {
+      console.error('Drop error:', err);
+    } finally {
+      setIsSubmittingSession(false);
     }
   };
 
@@ -226,6 +303,22 @@ export default function ClipPage() {
             ← ダッシュボードに戻る
           </Link>
         </div>
+
+        {/* ドロップターゲット情報表示 */}
+        {monster && (
+          <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-3">
+              <img src={monster.image_url} alt={monster.name} className="w-10 h-10 object-cover rounded-lg border border-gray-700" />
+              <div>
+                <div className="text-[10px] text-amber-400 font-bold">ドロップ対象 {"★".repeat(monster.rarity)}</div>
+                <div className="text-xs font-black">{monster.name}</div>
+              </div>
+            </div>
+            <div className="text-right text-[10px] text-gray-400 font-mono">
+              空欄0クリアで<br /><span className="text-cyan-400 font-bold">ドロップのチャンス!</span>
+            </div>
+          </div>
+        )}
 
         {/* 1. プレイヤー領域 */}
         {signedUrl ? (
@@ -372,9 +465,10 @@ export default function ClipPage() {
             <h2 className="text-sm font-bold text-gray-800">全文章リスト ({segments.length}文)</h2>
             <button
               onClick={handleCheckAllAnswers}
-              className="px-3 py-1.5 bg-green-600 text-white rounded-lg font-bold text-xs hover:bg-green-700 shadow-sm"
+              disabled={isSubmittingSession}
+              className="px-3.5 py-2 bg-green-600 text-white rounded-lg font-bold text-xs hover:bg-green-700 disabled:opacity-50 shadow-sm"
             >
-              全体を一括チェック
+              {isSubmittingSession ? '判定中...' : '全体を一括チェック＆判定'}
             </button>
           </div>
 
@@ -401,6 +495,46 @@ export default function ClipPage() {
             })}
           </div>
         </div>
+
+        {/* ドロップ結果表示モーダル */}
+        {dropResult && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-900 border border-gray-800 text-white p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+              {dropResult.isFirstClear && (
+                <span className="bg-amber-500 text-black font-black px-3 py-1 rounded-full text-xs animate-bounce inline-block">
+                  🎉 初回クリア！確定ドロップ！
+                </span>
+              )}
+
+              {dropResult.isDropped ? (
+                <div className="space-y-3">
+                  <div className="text-3xl animate-pulse">🎁</div>
+                  <h3 className="text-lg font-black text-green-400">モンスターGET!</h3>
+                  <img src={dropResult.monster.image_url} alt={dropResult.monster.name} className="w-24 h-24 object-cover rounded-xl mx-auto border-2 border-green-500 shadow-md" />
+                  <div>
+                    <div className="text-sm font-bold">{dropResult.monster.name}</div>
+                    <div className="text-xs text-blue-400 font-mono mt-0.5">現在のラック: ☘️ {dropResult.newLuck}</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 py-4">
+                  <div className="text-3xl">💦</div>
+                  <h3 className="text-base font-bold text-gray-300">ドロップ失敗...</h3>
+                  <p className="text-xs text-gray-400 font-mono">
+                    今回のドロップ確率: {dropResult.dropRateUsed}%
+                  </p>
+                </div>
+              )}
+
+              <button
+                onClick={() => setDropResult(null)}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
     </main>

@@ -53,6 +53,8 @@ src/
         page.tsx
     history/
       page.tsx
+    monsters/
+      page.tsx
     verify/
       page.tsx
     videos/
@@ -65,6 +67,7 @@ src/
   components/
     ClipPlayer.tsx
     DrillView.tsx
+    GachaModal.tsx
     TranscriptView.tsx
   lib/
     supabase/
@@ -82,6 +85,8 @@ supabase/
     storage-migration
     storage-version
   functions/
+    gacha/
+      index.ts
     sign-clip/
       .npmrc
       deno.json
@@ -128,6 +133,169 @@ pause
 
 <file path="public/window.svg">
 <svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
+
+<file path="src/app/monsters/page.tsx">
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  element: string;
+  quote_en: string;
+  quote_ja: string;
+  madness_episode: string;
+  image_url: string;
+  stat_int: number;
+  stat_ear: number;
+  stat_voc: number;
+  stat_foc: number;
+  stat_luk: number;
+  stat_gut: number;
+  user_monsters?: {
+    luck: number;
+    total_obtained: number;
+  }[];
+}
+
+export default function MonstersPage() {
+  const [monsters, setMonsters] = useState<Monster[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonster, setSelectedMonster] = useState<Monster | null>(null);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function fetchMonsters() {
+      setLoading(true);
+
+      const { data: mData } = await supabase
+        .from("monsters")
+        .select("*, user_monsters(luck, total_obtained)")
+        .order("rarity", { ascending: false });
+
+      if (mData) setMonsters(mData as Monster[]);
+      setLoading(false);
+    }
+
+    void fetchMonsters();
+  }, [supabase]);
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white py-8">
+      <div className="max-w-4xl mx-auto px-4 space-y-6">
+        
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+          <div>
+            <h1 className="text-2xl font-black">📖 モンスター図鑑</h1>
+            <p className="text-xs text-gray-400 mt-1">
+              収集したモンスターのステータスとフレーバーテキストを確認できます
+            </p>
+          </div>
+          <Link
+            href="/"
+            className="px-3 py-1.5 bg-gray-800 text-gray-200 font-bold text-xs rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            ← ダッシュボード
+          </Link>
+        </div>
+
+        {/* 図鑑グリッド */}
+        {loading ? (
+          <p className="text-xs text-gray-500 text-center py-12">図鑑データを読み込み中...</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {monsters.map((m) => {
+              const isOwned = m.user_monsters && m.user_monsters.length > 0;
+              const luck = isOwned ? m.user_monsters![0].luck : 0;
+
+              return (
+                <div
+                  key={m.id}
+                  onClick={() => setSelectedMonster(m)}
+                  className={`bg-gray-900 border rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02] ${
+                    isOwned ? "border-gray-700 shadow-lg" : "border-gray-800 opacity-40 grayscale"
+                  }`}
+                >
+                  <div className="aspect-square relative bg-black">
+                    <img src={m.image_url} alt={m.name} className="w-full h-full object-cover" />
+                    <div className="absolute top-2 left-2 bg-black/60 backdrop-blur px-2 py-0.5 rounded text-[10px] font-bold text-amber-400">
+                      {"★".repeat(m.rarity)}
+                    </div>
+                    {isOwned && (
+                      <div className="absolute bottom-2 right-2 bg-blue-600 text-white font-mono text-[10px] font-bold px-1.5 py-0.5 rounded">
+                        ☘️ {luck}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-3 space-y-1">
+                    <h3 className="text-xs font-bold truncate">{isOwned ? m.name : "？？？？"}</h3>
+                    <p className="text-[10px] text-gray-500 font-mono truncate">{m.element.toUpperCase()}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 詳細表示モーダル */}
+        {selectedMonster && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 text-white space-y-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-xs text-amber-400 font-bold">
+                    {"★".repeat(selectedMonster.rarity)}
+                  </span>
+                  <h2 className="text-xl font-black">{selectedMonster.name}</h2>
+                  <p className="text-xs text-gray-400 font-mono">{selectedMonster.name_en}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedMonster(null)}
+                  className="text-gray-400 hover:text-white text-sm font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <img
+                src={selectedMonster.image_url}
+                alt={selectedMonster.name}
+                className="w-full h-48 object-cover rounded-xl border border-gray-800"
+              />
+
+              <div className="bg-gray-950 p-3 rounded-xl space-y-2 text-xs">
+                <p className="text-cyan-300 italic">"{selectedMonster.quote_ja}"</p>
+                <p className="text-gray-400 text-[11px] leading-relaxed">
+                  {selectedMonster.madness_episode}
+                </p>
+              </div>
+
+              {/* ステータス表 */}
+              <div className="grid grid-cols-3 gap-2 text-xs font-mono bg-gray-950 p-3 rounded-xl border border-gray-800">
+                <div>知力 (INT): <span className="font-bold text-blue-400">{selectedMonster.stat_int}</span></div>
+                <div>聴力 (EAR): <span className="font-bold text-green-400">{selectedMonster.stat_ear}</span></div>
+                <div>語彙 (VOC): <span className="font-bold text-purple-400">{selectedMonster.stat_voc}</span></div>
+                <div>集中 (FOC): <span className="font-bold text-amber-400">{selectedMonster.stat_foc}</span></div>
+                <div>幸運 (LUK): <span className="font-bold text-yellow-400">{selectedMonster.stat_luk}</span></div>
+                <div>胆力 (GUT): <span className="font-bold text-red-400">{selectedMonster.stat_gut}</span></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </main>
+  );
+}
 </file>
 
 <file path="src/app/verify/page.tsx">
@@ -554,6 +722,204 @@ export default function DrillView({ clipId, signedUrl }: Props) {
 }
 </file>
 
+<file path="src/components/GachaModal.tsx">
+"use client";
+
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  element: string;
+  quote_en: string;
+  quote_ja: string;
+  madness_episode: string;
+  image_url: string;
+  stat_int: number;
+  stat_ear: number;
+  stat_voc: number;
+  stat_foc: number;
+  stat_luk: number;
+  stat_gut: number;
+}
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  orbCount: number;
+}
+
+export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [animating, setAnimating] = useState(false);
+  const [result, setResult] = useState<{ monster: Monster; isNew: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  if (!isOpen) return null;
+
+  const handleSummon = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setAnimating(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("ログインしていません。");
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/gacha`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "ガチャ実行エラー");
+
+      // 1.5秒演出アニメーション待機
+      setTimeout(() => {
+        setResult(data);
+        setAnimating(false);
+        onSuccess();
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message);
+      setAnimating(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRarityColor = (r: number) => {
+    switch (r) {
+      case 5: return "from-amber-400 via-purple-500 to-indigo-600 border-amber-300 text-amber-300";
+      case 4: return "from-yellow-400 to-amber-600 border-yellow-400 text-yellow-300";
+      case 3: return "from-blue-400 to-indigo-600 border-blue-400 text-blue-300";
+      case 2: return "from-green-400 to-emerald-600 border-green-400 text-green-300";
+      default: return "from-gray-400 to-gray-600 border-gray-400 text-gray-300";
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 text-white space-y-6 shadow-2xl relative overflow-hidden">
+        
+        {/* ヘッダー */}
+        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+          <h2 className="text-lg font-black tracking-wide flex items-center gap-2">
+            <span>🔮 モンスター召喚</span>
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-sm font-bold">
+            ✕ 閉じる
+          </button>
+        </div>
+
+        {/* ガチャ演出領域 */}
+        {animating ? (
+          <div className="py-12 flex flex-col items-center justify-center space-y-4">
+            <div className="w-24 h-24 rounded-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 animate-spin flex items-center justify-center shadow-lg shadow-purple-500/50">
+              <div className="w-20 h-20 rounded-full bg-gray-900 flex items-center justify-center text-3xl">
+                💎
+              </div>
+            </div>
+            <p className="text-sm font-bold tracking-widest animate-pulse text-cyan-400">
+              モンスターを召喚中...
+            </p>
+          </div>
+        ) : result ? (
+          /* 結果表示 */
+          <div className="space-y-4 text-center">
+            <div className={`p-1 rounded-xl bg-gradient-to-b ${getRarityColor(result.monster.rarity)}`}>
+              <div className="bg-gray-950 rounded-lg p-4 space-y-3">
+                <div className="flex justify-between items-center text-xs font-bold font-mono">
+                  <span className="text-amber-400">
+                    {"★".repeat(result.monster.rarity)}
+                  </span>
+                  {result.isNew && (
+                    <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px]">
+                      NEW!
+                    </span>
+                  )}
+                </div>
+
+                <img
+                  src={result.monster.image_url}
+                  alt={result.monster.name}
+                  className="w-32 h-32 object-cover rounded-xl mx-auto border-2 border-gray-800 shadow-md"
+                />
+
+                <div>
+                  <h3 className="text-xl font-black text-white">{result.monster.name}</h3>
+                  <p className="text-xs text-gray-400 font-mono">{result.monster.name_en}</p>
+                </div>
+
+                <p className="text-xs italic text-cyan-300 font-serif">
+                  "{result.monster.quote_ja}"
+                </p>
+
+                {/* ステータス */}
+                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono bg-gray-900 p-2 rounded-lg text-gray-300">
+                  <div>INT: {result.monster.stat_int}</div>
+                  <div>EAR: {result.monster.stat_ear}</div>
+                  <div>VOC: {result.monster.stat_voc}</div>
+                  <div>FOC: {result.monster.stat_foc}</div>
+                  <div>LUK: {result.monster.stat_luk}</div>
+                  <div>GUT: {result.monster.stat_gut}</div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setResult(null)}
+              className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-xs font-bold transition-colors"
+            >
+              もう一度召喚画面に戻る
+            </button>
+          </div>
+        ) : (
+          /* 初期選択画面 */
+          <div className="space-y-6 text-center py-4">
+            <div className="space-y-2">
+              <div className="text-4xl">🔮</div>
+              <p className="text-xs text-gray-400">
+                オーブ5個を消費して召喚を行います。★4以上の強力なモンスターを獲得してステータスを強化しましょう。
+              </p>
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-400 bg-red-950/50 p-2 rounded border border-red-800">
+                {error}
+              </p>
+            )}
+
+            <button
+              onClick={handleSummon}
+              disabled={loading || orbCount < 5}
+              className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white rounded-xl font-black text-sm shadow-lg disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+            >
+              <span>5 オーブで召喚する</span>
+              <span className="text-xs font-mono opacity-80">(所持: {orbCount}個)</span>
+            </button>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="src/lib/supabase/client.ts">
 import { createBrowserClient } from "@supabase/ssr";
 
@@ -659,6 +1025,190 @@ fix-search-by-timestamp-sqli
 v1.71.0
 </file>
 
+<file path="supabase/functions/gacha/index.ts">
+import { createClient } from "npm:@supabase/supabase-js@2.47.10";
+
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
+  const allow = isWildcard
+    ? (origin ?? "*")
+    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
+
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+}
+
+Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const cors = corsHeaders(origin);
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+  if (req.method !== "POST") {
+    return new Response("method not allowed", { status: 405, headers: cors });
+  }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 1. オーブ残高の確認
+  const { data: balanceData } = await supabase
+    .from("orb_balance")
+    .select("balance")
+    .eq("owner_id", user.id)
+    .single();
+
+  const currentBalance = balanceData?.balance ?? 0;
+  if (currentBalance < 5) {
+    return new Response(JSON.stringify({ error: "オーブが不足しています（必要: 5個）" }), {
+      status: 400,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 2. 直近のピティ（天井）カウンター取得
+  const { data: lastGacha } = await supabase
+    .from("gacha_log")
+    .select("pity_counter_4, pity_counter_5")
+    .eq("owner_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let pity4 = lastGacha?.pity_counter_4 ?? 0;
+  let pity5 = lastGacha?.pity_counter_5 ?? 0;
+
+  // 3. ガチャ確率計算 (仕様書 3.3 準拠)
+  // 基本確率: ★1(38%), ★2(30%), ★3(20%), ★4(9.5%), ★5(2.5%)
+  let pityBonus = 0;
+  if (pity4 >= 5) {
+    pityBonus = (pity4 - 4) * 4.0; // 6回目から+4pt/回
+  }
+
+  let baseHighRarityProb = Math.min(26.0, 12.0 + pityBonus);
+  if (pity4 >= 10) baseHighRarityProb = 100.0; // 11回目で★4以上確定
+
+  const delta = Math.max(0, baseHighRarityProb - 12.0);
+  let prob5 = 2.5 + delta * 0.2;
+  let prob4 = 9.5 + delta * 0.8;
+
+  if (pity5 >= 40) {
+    prob5 = 100.0; // 41回目で★5確定
+    prob4 = 0.0;
+  }
+
+  const rand = Math.random() * 100;
+  let selectedRarity = 1;
+
+  if (rand < prob5) {
+    selectedRarity = 5;
+  } else if (rand < prob5 + prob4) {
+    selectedRarity = 4;
+  } else if (rand < prob5 + prob4 + 20.0) {
+    selectedRarity = 3;
+  } else if (rand < prob5 + prob4 + 20.0 + 30.0) {
+    selectedRarity = 2;
+  } else {
+    selectedRarity = 1;
+  }
+
+  // 4. モンスター抽選
+  const { data: availableMonsters } = await supabase
+    .from("monsters")
+    .select("*")
+    .eq("rarity", selectedRarity);
+
+  if (!availableMonsters || availableMonsters.length === 0) {
+    return new Response(JSON.stringify({ error: "該当するレアリティのモンスターが存在しません" }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const monster = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
+
+  // 5. オーブ消費処理 (追記専用 orb_ledger)
+  await supabase.from("orb_ledger").insert({
+    owner_id: user.id,
+    delta: -5,
+    reason: "gacha_summon",
+  });
+
+  // 6. user_monsters（所持/ラック）更新
+  const { data: existing } = await supabase
+    .from("user_monsters")
+    .select("luck, total_obtained")
+    .eq("owner_id", user.id)
+    .eq("monster_id", monster.id)
+    .maybeSingle();
+
+  let isNew = false;
+  if (existing) {
+    await supabase
+      .from("user_monsters")
+      .update({
+        luck: Math.min(99, existing.luck + 1),
+        total_obtained: existing.total_obtained + 1,
+      })
+      .eq("owner_id", user.id)
+      .eq("monster_id", monster.id);
+  } else {
+    isNew = true;
+    await supabase.from("user_monsters").insert({
+      owner_id: user.id,
+      monster_id: monster.id,
+      luck: 1,
+      total_obtained: 1,
+    });
+  }
+
+  // 7. ガチャログ更新（ピティリセット判定）
+  const newPity4 = selectedRarity >= 4 ? 0 : pity4 + 1;
+  const newPity5 = selectedRarity === 5 ? 0 : pity5 + 1;
+
+  await supabase.from("gacha_log").insert({
+    owner_id: user.id,
+    monster_id: monster.id,
+    rarity: selectedRarity,
+    pity_counter_4: newPity4,
+    pity_counter_5: newPity5,
+  });
+
+  return new Response(
+    JSON.stringify({
+      monster,
+      isNew,
+      rarity: selectedRarity,
+      remainingOrbs: currentBalance - 5,
+    }),
+    { headers: { ...cors, "Content-Type": "application/json" } }
+  );
+});
+</file>
+
 <file path="supabase/functions/sign-clip/.npmrc">
 # Configuration for private npm package dependencies
 # For more information on using private registries with Edge Functions, see:
@@ -672,19 +1222,6 @@ v1.71.0
     "@supabase/server": "npm:@supabase/server@^1"
   }
 }
-</file>
-
-<file path="supabase/config.toml">
-[functions.sign-clip]
-enabled = true
-verify_jwt = false
-import_map = "./functions/sign-clip/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/sign-clip/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/sign-clip/*.html" ]
 </file>
 
 <file path=".gitignore">
@@ -1523,6 +2060,20 @@ Deno.serve(async (req) => {
 });
 </file>
 
+<file path="supabase/config.toml">
+[functions.sign-clip]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sign-clip/deno.json"
+entrypoint = "./functions/sign-clip/index.ts"
+
+[functions.gacha]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sign-clip/deno.json"
+entrypoint = "./functions/gacha/index.ts"
+</file>
+
 <file path="next.config.ts">
 import type { NextConfig } from "next";
 
@@ -1577,6 +2128,7 @@ export default nextConfig;
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import GachaModal from "@/components/GachaModal";
 
 interface Video {
   id: string;
@@ -1624,6 +2176,9 @@ export default function DashboardPage() {
   const [editingClip, setEditingClip] = useState<Clip | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editTags, setEditTags] = useState("");
+
+  // ガチャモーダル表示フラグ
+  const [isGachaOpen, setIsGachaOpen] = useState(false);
 
   const supabase = createClient();
 
@@ -1796,15 +2351,30 @@ export default function DashboardPage() {
       <div className="max-w-3xl mx-auto px-4 space-y-6">
         
         {/* ヘッダー領域 */}
-        <div className="flex justify-between items-center border-b pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3">
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
-            <Link href="/history" className="inline-block mt-1 text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
-              📝 間違いノート・履歴を開く ➔
-            </Link>
+            <div className="flex items-center gap-2 mt-1">
+              <Link href="/history" className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
+                📝 間違いノート ➔
+              </Link>
+              {/* ガチャ・図鑑へのボタン */}
+              <button
+                onClick={() => setIsGachaOpen(true)}
+                className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1"
+              >
+                🔮 召喚 (ガチャ)
+              </button>
+              <Link
+                href="/monsters"
+                className="px-2.5 py-1 bg-gray-800 text-gray-200 text-xs font-bold rounded hover:bg-gray-700 transition-colors"
+              >
+                📖 図鑑
+              </Link>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 text-right">
+          <div className="flex items-center gap-4 text-right self-end sm:self-auto">
             <div className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-1.5">
               <span className="text-base">💎</span>
               <div className="text-left">
@@ -1828,7 +2398,7 @@ export default function DashboardPage() {
               type="text"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="[https://www.youtube.com/watch?v=](https://www.youtube.com/watch?v=)..."
+              placeholder="https://www.youtube.com/watch?v=..."
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
               required
             />
@@ -1882,14 +2452,13 @@ export default function DashboardPage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 {filteredClips.map((clip) => {
                   const ytId = clip.videos?.youtube_id;
-                  const thumbUrl = ytId ? `[https://img.youtube.com/vi/$](https://img.youtube.com/vi/$){ytId}/hqdefault.jpg` : null;
+                  const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
 
                   return (
                     <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
                       {thumbUrl && (
                         <div className="aspect-video bg-black relative">
                           <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
-                          {/* ★ 難易度バッジ表示 */}
                           {clip.difficulty_tier && (
                             <span className={`absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-sm ${getTierBadgeStyle(clip.difficulty_tier)}`}>
                               {clip.difficulty_tier} (Score: {clip.difficulty_score ?? 0})
@@ -1924,7 +2493,6 @@ export default function DashboardPage() {
                             </div>
                           </div>
 
-                          {/* WPM情報表示 */}
                           {clip.effective_wpm && (
                             <div className="text-[10px] text-gray-500 font-mono">
                               実効WPM: {clip.effective_wpm}
@@ -1973,7 +2541,7 @@ export default function DashboardPage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {filteredVideos.map((video) => {
-                  const thumbUrl = video.youtube_id ? `[https://img.youtube.com/vi/$](https://img.youtube.com/vi/$){video.youtube_id}/hqdefault.jpg` : null;
+                  const thumbUrl = video.youtube_id ? `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg` : null;
 
                   return (
                     <Link
@@ -2033,6 +2601,14 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* ガチャモーダル表示 */}
+        <GachaModal
+          isOpen={isGachaOpen}
+          onClose={() => setIsGachaOpen(false)}
+          onSuccess={() => void fetchData()}
+          orbCount={orbCount}
+        />
 
       </div>
     </main>

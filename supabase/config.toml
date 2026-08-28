@@ -9,3 +9,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/sign-clip/deno.json"
 entrypoint = "./functions/gacha/index.ts"
+
+[functions.drop]
+enabled = true
+verify_jwt = false
+import_map = "./functions/sign-clip/deno.json"
+entrypoint = "./functions/drop/index.ts"
