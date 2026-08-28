@@ -20,7 +20,6 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-// 難易度ティア倍率 (仕様書 3.4 準拠)
 const TIER_MULT: Record<string, number> = {
   "初級": 0.7,
   "中級": 1.0,
@@ -29,8 +28,16 @@ const TIER_MULT: Record<string, number> = {
   "超絶": 1.5,
 };
 
-// 同日逓減率 (仕様書 3.4 準拠)
 const DECAY = [1.0, 0.85, 0.70, 0.55, 0.40];
+
+const getLuckMultiplier = (luck: number) => {
+  if (luck >= 99) return 1.30;
+  if (luck >= 90) return 1.22;
+  if (luck >= 60) return 1.15;
+  if (luck >= 30) return 1.08;
+  if (luck >= 10) return 1.03;
+  return 1.0;
+};
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
@@ -76,7 +83,7 @@ Deno.serve(async (req) => {
 
   const { clipId, rawAccuracy, blankTotal, blankFilled } = body;
 
-  // 1. クリップ情報と割り当てモンスターの取得
+  // 1. クリップ情報の取得
   const { data: clip, error: clipErr } = await supabase
     .from("clips")
     .select("*, monsters(*)")
@@ -90,7 +97,6 @@ Deno.serve(async (req) => {
     });
   }
 
-  // クリップにモンスターが未割り当ての場合、ランダムに1体割り当てる
   let monster = clip.monsters;
   if (!monster) {
     const { data: allMonsters } = await supabase.from("monsters").select("*");
@@ -100,7 +106,32 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 2. 本日のプレイ回数を取得（同日逓減の計算用）
+  // 2. パーティの EAR (聴力) ステータス加算計算 (仕様書 4 準拠)
+  const { data: partyList } = await supabase
+    .from("party")
+    .select("monster_id, monsters(*)")
+    .eq("owner_id", user.id);
+
+  let earSum = 0;
+  if (partyList) {
+    for (const p of partyList) {
+      if (!p.monsters) continue;
+      const { data: uMon } = await supabase
+        .from("user_monsters")
+        .select("luck")
+        .eq("owner_id", user.id)
+        .eq("monster_id", p.monster_id)
+        .maybeSingle();
+
+      const luck = uMon?.luck ?? 1;
+      const mult = getLuckMultiplier(luck);
+      earSum += Math.round((p.monsters as any).stat_ear * mult);
+    }
+  }
+
+  const earBonusPt = Math.min(20.0, earSum * 0.006);
+
+  // 3. プレイ回数取得
   const todayStr = new Date().toISOString().split("T")[0];
   const { count: todayCount } = await supabase
     .from("play_sessions")
@@ -111,7 +142,7 @@ Deno.serve(async (req) => {
 
   const playIndexToday = (todayCount ?? 0) + 1;
 
-  // 3. 初クリア判定
+  // 4. 初クリア判定
   const { count: totalClearCount } = await supabase
     .from("play_sessions")
     .select("*", { count: "exact", head: true })
@@ -120,15 +151,13 @@ Deno.serve(async (req) => {
 
   const isFirstClear = (totalClearCount ?? 0) === 0;
 
-  // 4. ドロップ率の計算 (グランドルール4: 空欄が1つでもある場合は確定で0%)[cite: 5]
+  // 5. ドロップ率計算
   let dropRate = 0;
 
   if (blankFilled >= blankTotal && blankTotal > 0) {
     if (isFirstClear) {
-      // 初見確定ドロップ[cite: 5]
       dropRate = 100.0;
     } else {
-      // 正答率 Base (仕様書 3.4 準拠)[cite: 5]
       let base = 10;
       if (rawAccuracy >= 100) base = 100;
       else if (rawAccuracy >= 95) base = 85;
@@ -141,11 +170,11 @@ Deno.serve(async (req) => {
       const tierMult = TIER_MULT[clip.difficulty_tier ?? "中級"] ?? 1.0;
       const decayMult = DECAY[Math.min(playIndexToday - 1, DECAY.length - 1)];
 
-      dropRate = Math.max(0, Math.min(100, base * tierMult * decayMult));
+      dropRate = Math.max(0, Math.min(100, base * tierMult * decayMult + earBonusPt));
     }
   }
 
-  // 5. 抽選処理
+  // 6. 抽選
   const rand = Math.random() * 100;
   const isDropped = rand < dropRate;
 
@@ -179,7 +208,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 6. 学習セッション履歴（play_sessions）の保存[cite: 5]
+  // 7. 保存
   await supabase.from("play_sessions").insert({
     owner_id: user.id,
     clip_id: clipId,

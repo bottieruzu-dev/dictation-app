@@ -20,6 +20,15 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
+const getLuckMultiplier = (luck: number) => {
+  if (luck >= 99) return 1.30;
+  if (luck >= 90) return 1.22;
+  if (luck >= 60) return 1.15;
+  if (luck >= 30) return 1.08;
+  if (luck >= 10) return 1.03;
+  return 1.0;
+};
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("Origin");
   const cors = corsHeaders(origin);
@@ -61,7 +70,32 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 2. 直近のピティ（天井）カウンター取得
+  // 2. パーティの LUK (幸運) ステータス加算計算 (仕様書 4 準拠)
+  const { data: partyList } = await supabase
+    .from("party")
+    .select("monster_id, monsters(*)")
+    .eq("owner_id", user.id);
+
+  let lukSum = 0;
+  if (partyList) {
+    for (const p of partyList) {
+      if (!p.monsters) continue;
+      const { data: uMon } = await supabase
+        .from("user_monsters")
+        .select("luck")
+        .eq("owner_id", user.id)
+        .eq("monster_id", p.monster_id)
+        .maybeSingle();
+
+      const luck = uMon?.luck ?? 1;
+      const mult = getLuckMultiplier(luck);
+      lukSum += Math.round((p.monsters as any).stat_luk * mult);
+    }
+  }
+
+  const lukGachaBonusPt = Math.min(3.0, lukSum * 0.0012);
+
+  // 3. 直近のピティ取得
   const { data: lastGacha } = await supabase
     .from("gacha_log")
     .select("pity_counter_4, pity_counter_5")
@@ -73,22 +107,21 @@ Deno.serve(async (req) => {
   let pity4 = lastGacha?.pity_counter_4 ?? 0;
   let pity5 = lastGacha?.pity_counter_5 ?? 0;
 
-  // 3. ガチャ確率計算 (仕様書 3.3 準拠)
-  // 基本確率: ★1(38%), ★2(30%), ★3(20%), ★4(9.5%), ★5(2.5%)
+  // 4. ガチャ確率計算 (仕様書 3.3 準拠)
   let pityBonus = 0;
   if (pity4 >= 5) {
-    pityBonus = (pity4 - 4) * 4.0; // 6回目から+4pt/回
+    pityBonus = (pity4 - 4) * 4.0;
   }
 
-  let baseHighRarityProb = Math.min(26.0, 12.0 + pityBonus);
-  if (pity4 >= 10) baseHighRarityProb = 100.0; // 11回目で★4以上確定
+  let baseHighRarityProb = Math.min(26.0, 12.0 + pityBonus + lukGachaBonusPt);
+  if (pity4 >= 10) baseHighRarityProb = 100.0;
 
   const delta = Math.max(0, baseHighRarityProb - 12.0);
   let prob5 = 2.5 + delta * 0.2;
   let prob4 = 9.5 + delta * 0.8;
 
   if (pity5 >= 40) {
-    prob5 = 100.0; // 41回目で★5確定
+    prob5 = 100.0;
     prob4 = 0.0;
   }
 
@@ -107,7 +140,7 @@ Deno.serve(async (req) => {
     selectedRarity = 1;
   }
 
-  // 4. モンスター抽選
+  // 5. モンスター抽選
   const { data: availableMonsters } = await supabase
     .from("monsters")
     .select("*")
@@ -122,14 +155,14 @@ Deno.serve(async (req) => {
 
   const monster = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
 
-  // 5. オーブ消費処理 (追記専用 orb_ledger)
+  // 6. オーブ消費
   await supabase.from("orb_ledger").insert({
     owner_id: user.id,
     delta: -5,
     reason: "gacha_summon",
   });
 
-  // 6. user_monsters（所持/ラック）更新
+  // 7. 所持更新
   const { data: existing } = await supabase
     .from("user_monsters")
     .select("luck, total_obtained")
@@ -157,7 +190,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 7. ガチャログ更新（ピティリセット判定）
+  // 8. ログ更新
   const newPity4 = selectedRarity >= 4 ? 0 : pity4 + 1;
   const newPity5 = selectedRarity === 5 ? 0 : pity5 + 1;
 

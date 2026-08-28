@@ -52,7 +52,6 @@ export default function DashboardPage() {
   const [editLabel, setEditLabel] = useState("");
   const [editTags, setEditTags] = useState("");
 
-  // ガチャモーダル表示フラグ
   const [isGachaOpen, setIsGachaOpen] = useState(false);
 
   const supabase = createClient();
@@ -229,11 +228,17 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3">
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Link href="/history" className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
                 📝 間違いノート ➔
               </Link>
-              {/* ガチャ・図鑑へのボタン */}
+              {/* パーティ・ガチャ・図鑑ボタン */}
+              <Link
+                href="/party"
+                className="px-2.5 py-1 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-1"
+              >
+                ⚔️ パーティ編成
+              </Link>
               <button
                 onClick={() => setIsGachaOpen(true)}
                 className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1"
