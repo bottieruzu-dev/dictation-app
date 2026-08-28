@@ -81,8 +81,17 @@ export default function ClipPage() {
 
       if (clipData) {
         setClip(clipData);
+
+        // ★ モンスターが割り当てられていれば表示。未割り当てならここで自動選出＆保存
         if (clipData.monsters) {
           setMonster(clipData.monsters);
+        } else {
+          const { data: allMonsters } = await supabase.from('monsters').select('*');
+          if (allMonsters && allMonsters.length > 0) {
+            const randomMonster = allMonsters[Math.floor(Math.random() * allMonsters.length)];
+            await supabase.from('clips').update({ monster_id: randomMonster.id }).eq('id', id);
+            setMonster(randomMonster);
+          }
         }
 
         const { data: segData } = await supabase
