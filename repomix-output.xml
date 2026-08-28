@@ -55,6 +55,8 @@ src/
       page.tsx
     monsters/
       page.tsx
+    party/
+      page.tsx
     verify/
       page.tsx
     videos/
@@ -293,6 +295,391 @@ export default function MonstersPage() {
             </div>
           </div>
         )}
+
+      </div>
+    </main>
+  );
+}
+</file>
+
+<file path="src/app/party/page.tsx">
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  element: string;
+  image_url: string;
+  stat_int: number;
+  stat_ear: number;
+  stat_voc: number;
+  stat_foc: number;
+  stat_luk: number;
+  stat_gut: number;
+  user_monsters?: {
+    luck: number;
+  }[];
+}
+
+export default function PartyPage() {
+  const [ownedMonsters, setOwnedMonsters] = useState<Monster[]>([]);
+  const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  // ラックによるステータス倍率の計算 (仕様書 4 準拠)
+  const getLuckMultiplier = (luck: number) => {
+    if (luck >= 99) return 1.30; // +30%
+    if (luck >= 90) return 1.22; // +22%
+    if (luck >= 60) return 1.15; // +15%
+    if (luck >= 30) return 1.08; // +8%
+    if (luck >= 10) return 1.03; // +3%
+    return 1.0;
+  };
+
+  useEffect(() => {
+    async function fetchPartyData() {
+      setLoading(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // 所持モンスター一覧の取得
+      const { data: mData } = await supabase
+        .from("user_monsters")
+        .select("monsters(*), luck")
+        .eq("owner_id", user.id);
+
+      if (mData) {
+        const list: Monster[] = mData.map((item: any) => ({
+          ...item.monsters,
+          user_monsters: [{ luck: item.luck }],
+        }));
+        setOwnedMonsters(list);
+
+        // 現在の編成（party）を取得
+        const { data: pData } = await supabase
+          .from("party")
+          .select("slot, monster_id")
+          .eq("owner_id", user.id)
+          .order("slot", { ascending: true });
+
+        if (pData) {
+          const slots: (Monster | null)[] = [null, null, null];
+          pData.forEach((p) => {
+            const found = list.find((m) => m.id === p.monster_id);
+            if (found && p.slot >= 1 && p.slot <= 3) {
+              slots[p.slot - 1] = found;
+            }
+          });
+          setPartySlots(slots);
+        }
+      }
+
+      setLoading(false);
+    }
+
+    void fetchPartyData();
+  }, [supabase]);
+
+  // モンスターをスロットにセット
+  const handleSelectMonster = (monster: Monster, targetSlotIndex: number) => {
+    setMessage(null);
+    const newSlots = [...partySlots];
+
+    // すでに別のスロットにいる場合は重複を解除
+    const existingIndex = newSlots.findIndex((s) => s?.id === monster.id);
+    if (existingIndex !== -1) {
+      newSlots[existingIndex] = null;
+    }
+
+    newSlots[targetSlotIndex] = monster;
+    setPartySlots(newSlots);
+  };
+
+  // スロットを空にする
+  const handleClearSlot = (slotIndex: number) => {
+    setMessage(null);
+    const newSlots = [...partySlots];
+    newSlots[slotIndex] = null;
+    setPartySlots(newSlots);
+  };
+
+  // パーティ編成の保存
+  const handleSaveParty = async () => {
+    setSaving(true);
+    setMessage(null);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setMessage("🚨 ログインが必要です");
+      setSaving(false);
+      return;
+    }
+
+    try {
+      // 既存編成を削除して更新
+      await supabase.from("party").delete().eq("owner_id", user.id);
+
+      const inserts = partySlots
+        .map((m, idx) => {
+          if (!m) return null;
+          return {
+            owner_id: user.id,
+            slot: idx + 1,
+            monster_id: m.id,
+          };
+        })
+        .filter(Boolean);
+
+      if (inserts.length > 0) {
+        await supabase.from("party").insert(inserts);
+      }
+
+      setMessage("🎉 パーティ編成を保存しました！");
+    } catch (err: any) {
+      setMessage(`🚨 エラー: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // パーティ合計ステータスの計算
+  const calculateTotalStats = () => {
+    let intSum = 0, earSum = 0, vocSum = 0, focSum = 0, lukSum = 0, gutSum = 0;
+
+    partySlots.forEach((m) => {
+      if (!m) return;
+      const luck = m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 1;
+      const mult = getLuckMultiplier(luck);
+
+      intSum += Math.round(m.stat_int * mult);
+      earSum += Math.round(m.stat_ear * mult);
+      vocSum += Math.round(m.stat_voc * mult);
+      focSum += Math.round(m.stat_foc * mult);
+      lukSum += Math.round(m.stat_luk * mult);
+      gutSum += Math.round(m.stat_gut * mult);
+    });
+
+    return {
+      int: intSum,
+      ear: earSum,
+      voc: vocSum,
+      foc: focSum,
+      luk: lukSum,
+      gut: gutSum,
+      // 各ゲーム内効果 (仕様書 4 準拠)
+      xpMult: Math.min(2.5, 1.0 + intSum * 0.0008).toFixed(2),
+      earDropBonus: Math.min(20.0, earSum * 0.006).toFixed(1),
+      vocHints: Math.min(5, Math.floor(vocSum / 400)),
+      focComboGrace: Math.min(3, Math.floor(focSum / 700)),
+      lukGachaBonus: Math.min(3.0, lukSum * 0.0012).toFixed(2),
+      gutShields: Math.min(3, Math.floor(gutSum / 900)),
+    };
+  };
+
+  const stats = calculateTotalStats();
+
+  return (
+    <main className="min-h-screen bg-gray-950 text-white py-8">
+      <div className="max-w-4xl mx-auto px-4 space-y-6">
+        
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+          <div>
+            <h1 className="text-2xl font-black">⚔️ パーティ編成</h1>
+            <p className="text-xs text-gray-400 mt-1">
+              所持モンスターを3体編成し、ステータス効果を発動させます
+            </p>
+          </div>
+          <Link
+            href="/"
+            className="px-3 py-1.5 bg-gray-800 text-gray-200 font-bold text-xs rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            ← ダッシュボード
+          </Link>
+        </div>
+
+        {/* 1. スロット編成領域 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[0, 1, 2].map((slotIdx) => {
+            const m = partySlots[slotIdx];
+            const luck = m && m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 0;
+
+            return (
+              <div
+                key={slotIdx}
+                className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col justify-between space-y-3 relative shadow-lg"
+              >
+                <div className="flex justify-between items-center text-xs font-bold font-mono text-gray-400">
+                  <span>SLOT #{slotIdx + 1}</span>
+                  {m && (
+                    <button
+                      onClick={() => handleClearSlot(slotIdx)}
+                      className="text-red-400 hover:text-red-300 text-[10px]"
+                    >
+                      外す ✕
+                    </button>
+                  )}
+                </div>
+
+                {m ? (
+                  <div className="space-y-2 text-center py-2">
+                    <img
+                      src={m.image_url}
+                      alt={m.name}
+                      className="w-24 h-24 object-cover rounded-xl mx-auto border-2 border-indigo-500 shadow-md"
+                    />
+                    <div>
+                      <div className="text-xs text-amber-400 font-bold">{"★".repeat(m.rarity)}</div>
+                      <div className="text-sm font-black">{m.name}</div>
+                      <div className="text-[10px] text-blue-400 font-mono mt-0.5">☘️ ラック: {luck}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-10 text-center text-gray-600 border-2 border-dashed border-gray-800 rounded-xl space-y-1">
+                    <div className="text-2xl">➕</div>
+                    <div className="text-xs font-bold">未設定</div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 保存ボタン・メッセージ */}
+        <div className="flex flex-col items-center gap-2">
+          {message && (
+            <div className="p-2.5 bg-indigo-950 border border-indigo-800 text-indigo-300 text-xs font-bold rounded-lg text-center w-full max-w-md">
+              {message}
+            </div>
+          )}
+
+          <button
+            onClick={handleSaveParty}
+            disabled={saving}
+            className="w-full max-w-md py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 text-white font-black text-sm rounded-xl shadow-lg disabled:opacity-50 transition-all"
+          >
+            {saving ? "保存中..." : "💾 パーティ編成を保存する"}
+          </button>
+        </div>
+
+        {/* 2. 合計ステータス & 特殊効果サマリー */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-sm font-bold text-gray-300 border-b border-gray-800 pb-2">
+            📊 パーティ合計ステータス & 発動効果
+          </h2>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
+            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
+              <span className="text-gray-400 block text-[10px]">知力 (INT)</span>
+              <span className="text-lg font-black text-blue-400">{stats.int}</span>
+              <span className="text-[10px] text-gray-400 block mt-1">獲得XP: {stats.xpMult}倍</span>
+            </div>
+
+            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
+              <span className="text-gray-400 block text-[10px]">聴力 (EAR)</span>
+              <span className="text-lg font-black text-green-400">{stats.ear}</span>
+              <span className="text-[10px] text-gray-400 block mt-1">ドロップ加算: +{stats.earDropBonus}pt</span>
+            </div>
+
+            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
+              <span className="text-gray-400 block text-[10px]">語彙 (VOC)</span>
+              <span className="text-lg font-black text-purple-400">{stats.voc}</span>
+              <span className="text-[10px] text-gray-400 block mt-1">ヒント可能回数: {stats.vocHints}回</span>
+            </div>
+
+            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
+              <span className="text-gray-400 block text-[10px]">集中 (FOC)</span>
+              <span className="text-lg font-black text-amber-400">{stats.foc}</span>
+              <span className="text-[10px] text-gray-400 block mt-1">ミス許容回数: {stats.focComboGrace}回</span>
+            </div>
+
+            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
+              <span className="text-gray-400 block text-[10px]">幸運 (LUK)</span>
+              <span className="text-lg font-black text-yellow-400">{stats.luk}</span>
+              <span className="text-[10px] text-gray-400 block mt-1">ガチャ★4加算: +{stats.lukGachaBonus}pt</span>
+            </div>
+
+            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
+              <span className="text-gray-400 block text-[10px]">胆力 (GUT)</span>
+              <span className="text-lg font-black text-red-400">{stats.gut}</span>
+              <span className="text-[10px] text-gray-400 block mt-1">月間ストリーク保護: {stats.gutShields}回</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. 所持モンスター選択一覧 */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
+          <h2 className="text-sm font-bold text-gray-300">
+            所持モンスター一覧 ({ownedMonsters.length}体)
+          </h2>
+
+          {loading ? (
+            <p className="text-xs text-gray-500 text-center py-6">読み込み中...</p>
+          ) : ownedMonsters.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center py-6">
+              所持しているモンスターがいません。「召喚（ガチャ）」でモンスターを獲得しましょう。
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {ownedMonsters.map((m) => {
+                const luck = m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 1;
+                const setSlotIdx = partySlots.findIndex((s) => s?.id === m.id);
+
+                return (
+                  <div
+                    key={m.id}
+                    className={`bg-gray-950 border rounded-xl p-3 space-y-2 relative transition-all ${
+                      setSlotIdx !== -1 ? "border-indigo-500 ring-2 ring-indigo-500/30" : "border-gray-800 hover:border-gray-700"
+                    }`}
+                  >
+                    {setSlotIdx !== -1 && (
+                      <span className="absolute top-2 left-2 bg-indigo-600 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded">
+                        SLOT #{setSlotIdx + 1}
+                      </span>
+                    )}
+
+                    <img src={m.image_url} alt={m.name} className="w-16 h-16 object-cover rounded-lg mx-auto border border-gray-800" />
+
+                    <div className="text-center">
+                      <div className="text-[10px] text-amber-400">{"★".repeat(m.rarity)}</div>
+                      <div className="text-xs font-bold truncate">{m.name}</div>
+                      <div className="text-[10px] text-blue-400 font-mono">☘️ {luck}</div>
+                    </div>
+
+                    {/* スロットセットボタン */}
+                    <div className="grid grid-cols-3 gap-1 pt-1">
+                      {[0, 1, 2].map((sIdx) => (
+                        <button
+                          key={sIdx}
+                          onClick={() => handleSelectMonster(m, sIdx)}
+                          className={`py-1 text-[10px] font-bold rounded ${
+                            setSlotIdx === sIdx ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                          }`}
+                        >
+                          #{sIdx + 1}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
       </div>
     </main>
@@ -1027,400 +1414,6 @@ fix-search-by-timestamp-sqli
 v1.71.0
 </file>
 
-<file path="supabase/functions/drop/index.ts">
-import { createClient } from "npm:@supabase/supabase-js@2.47.10";
-
-const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-function corsHeaders(origin: string | null): Record<string, string> {
-  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
-  const allow = isWildcard
-    ? (origin ?? "*")
-    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
-
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers": "authorization, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
-}
-
-// 難易度ティア倍率 (仕様書 3.4 準拠)
-const TIER_MULT: Record<string, number> = {
-  "初級": 0.7,
-  "中級": 1.0,
-  "上級": 1.15,
-  "超上級": 1.3,
-  "超絶": 1.5,
-};
-
-// 同日逓減率 (仕様書 3.4 準拠)
-const DECAY = [1.0, 0.85, 0.70, 0.55, 0.40];
-
-Deno.serve(async (req) => {
-  const origin = req.headers.get("Origin");
-  const cors = corsHeaders(origin);
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: cors });
-  }
-  if (req.method !== "POST") {
-    return new Response("method not allowed", { status: 405, headers: cors });
-  }
-
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  let body: {
-    clipId: string;
-    rawAccuracy: number;
-    blankTotal: number;
-    blankFilled: number;
-  };
-
-  try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "invalid json" }), {
-      status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  const { clipId, rawAccuracy, blankTotal, blankFilled } = body;
-
-  // 1. クリップ情報と割り当てモンスターの取得
-  const { data: clip, error: clipErr } = await supabase
-    .from("clips")
-    .select("*, monsters(*)")
-    .eq("id", clipId)
-    .single();
-
-  if (clipErr || !clip) {
-    return new Response(JSON.stringify({ error: "クリップが見つかりません" }), {
-      status: 404,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  // クリップにモンスターが未割り当ての場合、ランダムに1体割り当てる
-  let monster = clip.monsters;
-  if (!monster) {
-    const { data: allMonsters } = await supabase.from("monsters").select("*");
-    if (allMonsters && allMonsters.length > 0) {
-      monster = allMonsters[Math.floor(Math.random() * allMonsters.length)];
-      await supabase.from("clips").update({ monster_id: monster.id }).eq("id", clipId);
-    }
-  }
-
-  // 2. 本日のプレイ回数を取得（同日逓減の計算用）
-  const todayStr = new Date().toISOString().split("T")[0];
-  const { count: todayCount } = await supabase
-    .from("play_sessions")
-    .select("*", { count: "exact", head: true })
-    .eq("owner_id", user.id)
-    .eq("clip_id", clipId)
-    .gte("started_at", `${todayStr}T00:00:00Z`);
-
-  const playIndexToday = (todayCount ?? 0) + 1;
-
-  // 3. 初クリア判定
-  const { count: totalClearCount } = await supabase
-    .from("play_sessions")
-    .select("*", { count: "exact", head: true })
-    .eq("owner_id", user.id)
-    .eq("clip_id", clipId);
-
-  const isFirstClear = (totalClearCount ?? 0) === 0;
-
-  // 4. ドロップ率の計算 (グランドルール4: 空欄が1つでもある場合は確定で0%)[cite: 5]
-  let dropRate = 0;
-
-  if (blankFilled >= blankTotal && blankTotal > 0) {
-    if (isFirstClear) {
-      // 初見確定ドロップ[cite: 5]
-      dropRate = 100.0;
-    } else {
-      // 正答率 Base (仕様書 3.4 準拠)[cite: 5]
-      let base = 10;
-      if (rawAccuracy >= 100) base = 100;
-      else if (rawAccuracy >= 95) base = 85;
-      else if (rawAccuracy >= 90) base = 70;
-      else if (rawAccuracy >= 80) base = 55;
-      else if (rawAccuracy >= 70) base = 40;
-      else if (rawAccuracy >= 60) base = 28;
-      else if (rawAccuracy >= 50) base = 18;
-
-      const tierMult = TIER_MULT[clip.difficulty_tier ?? "中級"] ?? 1.0;
-      const decayMult = DECAY[Math.min(playIndexToday - 1, DECAY.length - 1)];
-
-      dropRate = Math.max(0, Math.min(100, base * tierMult * decayMult));
-    }
-  }
-
-  // 5. 抽選処理
-  const rand = Math.random() * 100;
-  const isDropped = rand < dropRate;
-
-  let newLuck = 1;
-  if (isDropped && monster) {
-    const { data: existing } = await supabase
-      .from("user_monsters")
-      .select("luck, total_obtained")
-      .eq("owner_id", user.id)
-      .eq("monster_id", monster.id)
-      .maybeSingle();
-
-    if (existing) {
-      newLuck = Math.min(99, existing.luck + 1);
-      await supabase
-        .from("user_monsters")
-        .update({
-          luck: newLuck,
-          total_obtained: existing.total_obtained + 1,
-          lucky_max_at: newLuck === 99 ? new Date().toISOString() : null,
-        })
-        .eq("owner_id", user.id)
-        .eq("monster_id", monster.id);
-    } else {
-      await supabase.from("user_monsters").insert({
-        owner_id: user.id,
-        monster_id: monster.id,
-        luck: 1,
-        total_obtained: 1,
-      });
-    }
-  }
-
-  // 6. 学習セッション履歴（play_sessions）の保存[cite: 5]
-  await supabase.from("play_sessions").insert({
-    owner_id: user.id,
-    clip_id: clipId,
-    blank_total: blankTotal,
-    blank_filled: blankFilled,
-    correct_count: Math.round((rawAccuracy / 100) * blankTotal),
-    raw_accuracy: rawAccuracy,
-    adjusted_accuracy: rawAccuracy,
-    drop_rate_used: dropRate,
-    dropped_count: isDropped ? 1 : 0,
-    is_first_clear: isFirstClear,
-    play_index_today: playIndexToday,
-  });
-
-  return new Response(
-    JSON.stringify({
-      isDropped,
-      dropRateUsed: Math.round(dropRate),
-      monster,
-      newLuck,
-      isFirstClear,
-    }),
-    { headers: { ...cors, "Content-Type": "application/json" } }
-  );
-});
-</file>
-
-<file path="supabase/functions/gacha/index.ts">
-import { createClient } from "npm:@supabase/supabase-js@2.47.10";
-
-const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-function corsHeaders(origin: string | null): Record<string, string> {
-  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
-  const allow = isWildcard
-    ? (origin ?? "*")
-    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
-
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers": "authorization, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
-}
-
-Deno.serve(async (req) => {
-  const origin = req.headers.get("Origin");
-  const cors = corsHeaders(origin);
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: cors });
-  }
-  if (req.method !== "POST") {
-    return new Response("method not allowed", { status: 405, headers: cors });
-  }
-
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  // 1. オーブ残高の確認
-  const { data: balanceData } = await supabase
-    .from("orb_balance")
-    .select("balance")
-    .eq("owner_id", user.id)
-    .single();
-
-  const currentBalance = balanceData?.balance ?? 0;
-  if (currentBalance < 5) {
-    return new Response(JSON.stringify({ error: "オーブが不足しています（必要: 5個）" }), {
-      status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  // 2. 直近のピティ（天井）カウンター取得
-  const { data: lastGacha } = await supabase
-    .from("gacha_log")
-    .select("pity_counter_4, pity_counter_5")
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  let pity4 = lastGacha?.pity_counter_4 ?? 0;
-  let pity5 = lastGacha?.pity_counter_5 ?? 0;
-
-  // 3. ガチャ確率計算 (仕様書 3.3 準拠)
-  // 基本確率: ★1(38%), ★2(30%), ★3(20%), ★4(9.5%), ★5(2.5%)
-  let pityBonus = 0;
-  if (pity4 >= 5) {
-    pityBonus = (pity4 - 4) * 4.0; // 6回目から+4pt/回
-  }
-
-  let baseHighRarityProb = Math.min(26.0, 12.0 + pityBonus);
-  if (pity4 >= 10) baseHighRarityProb = 100.0; // 11回目で★4以上確定
-
-  const delta = Math.max(0, baseHighRarityProb - 12.0);
-  let prob5 = 2.5 + delta * 0.2;
-  let prob4 = 9.5 + delta * 0.8;
-
-  if (pity5 >= 40) {
-    prob5 = 100.0; // 41回目で★5確定
-    prob4 = 0.0;
-  }
-
-  const rand = Math.random() * 100;
-  let selectedRarity = 1;
-
-  if (rand < prob5) {
-    selectedRarity = 5;
-  } else if (rand < prob5 + prob4) {
-    selectedRarity = 4;
-  } else if (rand < prob5 + prob4 + 20.0) {
-    selectedRarity = 3;
-  } else if (rand < prob5 + prob4 + 20.0 + 30.0) {
-    selectedRarity = 2;
-  } else {
-    selectedRarity = 1;
-  }
-
-  // 4. モンスター抽選
-  const { data: availableMonsters } = await supabase
-    .from("monsters")
-    .select("*")
-    .eq("rarity", selectedRarity);
-
-  if (!availableMonsters || availableMonsters.length === 0) {
-    return new Response(JSON.stringify({ error: "該当するレアリティのモンスターが存在しません" }), {
-      status: 500,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  const monster = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
-
-  // 5. オーブ消費処理 (追記専用 orb_ledger)
-  await supabase.from("orb_ledger").insert({
-    owner_id: user.id,
-    delta: -5,
-    reason: "gacha_summon",
-  });
-
-  // 6. user_monsters（所持/ラック）更新
-  const { data: existing } = await supabase
-    .from("user_monsters")
-    .select("luck, total_obtained")
-    .eq("owner_id", user.id)
-    .eq("monster_id", monster.id)
-    .maybeSingle();
-
-  let isNew = false;
-  if (existing) {
-    await supabase
-      .from("user_monsters")
-      .update({
-        luck: Math.min(99, existing.luck + 1),
-        total_obtained: existing.total_obtained + 1,
-      })
-      .eq("owner_id", user.id)
-      .eq("monster_id", monster.id);
-  } else {
-    isNew = true;
-    await supabase.from("user_monsters").insert({
-      owner_id: user.id,
-      monster_id: monster.id,
-      luck: 1,
-      total_obtained: 1,
-    });
-  }
-
-  // 7. ガチャログ更新（ピティリセット判定）
-  const newPity4 = selectedRarity >= 4 ? 0 : pity4 + 1;
-  const newPity5 = selectedRarity === 5 ? 0 : pity5 + 1;
-
-  await supabase.from("gacha_log").insert({
-    owner_id: user.id,
-    monster_id: monster.id,
-    rarity: selectedRarity,
-    pity_counter_4: newPity4,
-    pity_counter_5: newPity5,
-  });
-
-  return new Response(
-    JSON.stringify({
-      monster,
-      isNew,
-      rarity: selectedRarity,
-      remainingOrbs: currentBalance - 5,
-    }),
-    { headers: { ...cors, "Content-Type": "application/json" } }
-  );
-});
-</file>
-
 <file path="supabase/functions/sign-clip/.npmrc">
 # Configuration for private npm package dependencies
 # For more information on using private registries with Edge Functions, see:
@@ -2145,6 +2138,462 @@ export default function TranscriptView({ videoId }: Props) {
 v2.116.0
 </file>
 
+<file path="supabase/functions/drop/index.ts">
+import { createClient } from "npm:@supabase/supabase-js@2.47.10";
+
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
+  const allow = isWildcard
+    ? (origin ?? "*")
+    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
+
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+}
+
+const TIER_MULT: Record<string, number> = {
+  "初級": 0.7,
+  "中級": 1.0,
+  "上級": 1.15,
+  "超上級": 1.3,
+  "超絶": 1.5,
+};
+
+const DECAY = [1.0, 0.85, 0.70, 0.55, 0.40];
+
+const getLuckMultiplier = (luck: number) => {
+  if (luck >= 99) return 1.30;
+  if (luck >= 90) return 1.22;
+  if (luck >= 60) return 1.15;
+  if (luck >= 30) return 1.08;
+  if (luck >= 10) return 1.03;
+  return 1.0;
+};
+
+Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const cors = corsHeaders(origin);
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+  if (req.method !== "POST") {
+    return new Response("method not allowed", { status: 405, headers: cors });
+  }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  let body: {
+    clipId: string;
+    rawAccuracy: number;
+    blankTotal: number;
+    blankFilled: number;
+  };
+
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "invalid json" }), {
+      status: 400,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const { clipId, rawAccuracy, blankTotal, blankFilled } = body;
+
+  // 1. クリップ情報の取得
+  const { data: clip, error: clipErr } = await supabase
+    .from("clips")
+    .select("*, monsters(*)")
+    .eq("id", clipId)
+    .single();
+
+  if (clipErr || !clip) {
+    return new Response(JSON.stringify({ error: "クリップが見つかりません" }), {
+      status: 404,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  let monster = clip.monsters;
+  if (!monster) {
+    const { data: allMonsters } = await supabase.from("monsters").select("*");
+    if (allMonsters && allMonsters.length > 0) {
+      monster = allMonsters[Math.floor(Math.random() * allMonsters.length)];
+      await supabase.from("clips").update({ monster_id: monster.id }).eq("id", clipId);
+    }
+  }
+
+  // 2. パーティの EAR (聴力) ステータス加算計算 (仕様書 4 準拠)
+  const { data: partyList } = await supabase
+    .from("party")
+    .select("monster_id, monsters(*)")
+    .eq("owner_id", user.id);
+
+  let earSum = 0;
+  if (partyList) {
+    for (const p of partyList) {
+      if (!p.monsters) continue;
+      const { data: uMon } = await supabase
+        .from("user_monsters")
+        .select("luck")
+        .eq("owner_id", user.id)
+        .eq("monster_id", p.monster_id)
+        .maybeSingle();
+
+      const luck = uMon?.luck ?? 1;
+      const mult = getLuckMultiplier(luck);
+      earSum += Math.round((p.monsters as any).stat_ear * mult);
+    }
+  }
+
+  const earBonusPt = Math.min(20.0, earSum * 0.006);
+
+  // 3. プレイ回数取得
+  const todayStr = new Date().toISOString().split("T")[0];
+  const { count: todayCount } = await supabase
+    .from("play_sessions")
+    .select("*", { count: "exact", head: true })
+    .eq("owner_id", user.id)
+    .eq("clip_id", clipId)
+    .gte("started_at", `${todayStr}T00:00:00Z`);
+
+  const playIndexToday = (todayCount ?? 0) + 1;
+
+  // 4. 初クリア判定
+  const { count: totalClearCount } = await supabase
+    .from("play_sessions")
+    .select("*", { count: "exact", head: true })
+    .eq("owner_id", user.id)
+    .eq("clip_id", clipId);
+
+  const isFirstClear = (totalClearCount ?? 0) === 0;
+
+  // 5. ドロップ率計算
+  let dropRate = 0;
+
+  if (blankFilled >= blankTotal && blankTotal > 0) {
+    if (isFirstClear) {
+      dropRate = 100.0;
+    } else {
+      let base = 10;
+      if (rawAccuracy >= 100) base = 100;
+      else if (rawAccuracy >= 95) base = 85;
+      else if (rawAccuracy >= 90) base = 70;
+      else if (rawAccuracy >= 80) base = 55;
+      else if (rawAccuracy >= 70) base = 40;
+      else if (rawAccuracy >= 60) base = 28;
+      else if (rawAccuracy >= 50) base = 18;
+
+      const tierMult = TIER_MULT[clip.difficulty_tier ?? "中級"] ?? 1.0;
+      const decayMult = DECAY[Math.min(playIndexToday - 1, DECAY.length - 1)];
+
+      dropRate = Math.max(0, Math.min(100, base * tierMult * decayMult + earBonusPt));
+    }
+  }
+
+  // 6. 抽選
+  const rand = Math.random() * 100;
+  const isDropped = rand < dropRate;
+
+  let newLuck = 1;
+  if (isDropped && monster) {
+    const { data: existing } = await supabase
+      .from("user_monsters")
+      .select("luck, total_obtained")
+      .eq("owner_id", user.id)
+      .eq("monster_id", monster.id)
+      .maybeSingle();
+
+    if (existing) {
+      newLuck = Math.min(99, existing.luck + 1);
+      await supabase
+        .from("user_monsters")
+        .update({
+          luck: newLuck,
+          total_obtained: existing.total_obtained + 1,
+          lucky_max_at: newLuck === 99 ? new Date().toISOString() : null,
+        })
+        .eq("owner_id", user.id)
+        .eq("monster_id", monster.id);
+    } else {
+      await supabase.from("user_monsters").insert({
+        owner_id: user.id,
+        monster_id: monster.id,
+        luck: 1,
+        total_obtained: 1,
+      });
+    }
+  }
+
+  // 7. 保存
+  await supabase.from("play_sessions").insert({
+    owner_id: user.id,
+    clip_id: clipId,
+    blank_total: blankTotal,
+    blank_filled: blankFilled,
+    correct_count: Math.round((rawAccuracy / 100) * blankTotal),
+    raw_accuracy: rawAccuracy,
+    adjusted_accuracy: rawAccuracy,
+    drop_rate_used: dropRate,
+    dropped_count: isDropped ? 1 : 0,
+    is_first_clear: isFirstClear,
+    play_index_today: playIndexToday,
+  });
+
+  return new Response(
+    JSON.stringify({
+      isDropped,
+      dropRateUsed: Math.round(dropRate),
+      monster,
+      newLuck,
+      isFirstClear,
+    }),
+    { headers: { ...cors, "Content-Type": "application/json" } }
+  );
+});
+</file>
+
+<file path="supabase/functions/gacha/index.ts">
+import { createClient } from "npm:@supabase/supabase-js@2.47.10";
+
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
+  const allow = isWildcard
+    ? (origin ?? "*")
+    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
+
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+}
+
+const getLuckMultiplier = (luck: number) => {
+  if (luck >= 99) return 1.30;
+  if (luck >= 90) return 1.22;
+  if (luck >= 60) return 1.15;
+  if (luck >= 30) return 1.08;
+  if (luck >= 10) return 1.03;
+  return 1.0;
+};
+
+Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const cors = corsHeaders(origin);
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+  if (req.method !== "POST") {
+    return new Response("method not allowed", { status: 405, headers: cors });
+  }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 1. オーブ残高の確認
+  const { data: balanceData } = await supabase
+    .from("orb_balance")
+    .select("balance")
+    .eq("owner_id", user.id)
+    .single();
+
+  const currentBalance = balanceData?.balance ?? 0;
+  if (currentBalance < 5) {
+    return new Response(JSON.stringify({ error: "オーブが不足しています（必要: 5個）" }), {
+      status: 400,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 2. パーティの LUK (幸運) ステータス加算計算 (仕様書 4 準拠)
+  const { data: partyList } = await supabase
+    .from("party")
+    .select("monster_id, monsters(*)")
+    .eq("owner_id", user.id);
+
+  let lukSum = 0;
+  if (partyList) {
+    for (const p of partyList) {
+      if (!p.monsters) continue;
+      const { data: uMon } = await supabase
+        .from("user_monsters")
+        .select("luck")
+        .eq("owner_id", user.id)
+        .eq("monster_id", p.monster_id)
+        .maybeSingle();
+
+      const luck = uMon?.luck ?? 1;
+      const mult = getLuckMultiplier(luck);
+      lukSum += Math.round((p.monsters as any).stat_luk * mult);
+    }
+  }
+
+  const lukGachaBonusPt = Math.min(3.0, lukSum * 0.0012);
+
+  // 3. 直近のピティ取得
+  const { data: lastGacha } = await supabase
+    .from("gacha_log")
+    .select("pity_counter_4, pity_counter_5")
+    .eq("owner_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let pity4 = lastGacha?.pity_counter_4 ?? 0;
+  let pity5 = lastGacha?.pity_counter_5 ?? 0;
+
+  // 4. ガチャ確率計算 (仕様書 3.3 準拠)
+  let pityBonus = 0;
+  if (pity4 >= 5) {
+    pityBonus = (pity4 - 4) * 4.0;
+  }
+
+  let baseHighRarityProb = Math.min(26.0, 12.0 + pityBonus + lukGachaBonusPt);
+  if (pity4 >= 10) baseHighRarityProb = 100.0;
+
+  const delta = Math.max(0, baseHighRarityProb - 12.0);
+  let prob5 = 2.5 + delta * 0.2;
+  let prob4 = 9.5 + delta * 0.8;
+
+  if (pity5 >= 40) {
+    prob5 = 100.0;
+    prob4 = 0.0;
+  }
+
+  const rand = Math.random() * 100;
+  let selectedRarity = 1;
+
+  if (rand < prob5) {
+    selectedRarity = 5;
+  } else if (rand < prob5 + prob4) {
+    selectedRarity = 4;
+  } else if (rand < prob5 + prob4 + 20.0) {
+    selectedRarity = 3;
+  } else if (rand < prob5 + prob4 + 20.0 + 30.0) {
+    selectedRarity = 2;
+  } else {
+    selectedRarity = 1;
+  }
+
+  // 5. モンスター抽選
+  const { data: availableMonsters } = await supabase
+    .from("monsters")
+    .select("*")
+    .eq("rarity", selectedRarity);
+
+  if (!availableMonsters || availableMonsters.length === 0) {
+    return new Response(JSON.stringify({ error: "該当するレアリティのモンスターが存在しません" }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const monster = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
+
+  // 6. オーブ消費
+  await supabase.from("orb_ledger").insert({
+    owner_id: user.id,
+    delta: -5,
+    reason: "gacha_summon",
+  });
+
+  // 7. 所持更新
+  const { data: existing } = await supabase
+    .from("user_monsters")
+    .select("luck, total_obtained")
+    .eq("owner_id", user.id)
+    .eq("monster_id", monster.id)
+    .maybeSingle();
+
+  let isNew = false;
+  if (existing) {
+    await supabase
+      .from("user_monsters")
+      .update({
+        luck: Math.min(99, existing.luck + 1),
+        total_obtained: existing.total_obtained + 1,
+      })
+      .eq("owner_id", user.id)
+      .eq("monster_id", monster.id);
+  } else {
+    isNew = true;
+    await supabase.from("user_monsters").insert({
+      owner_id: user.id,
+      monster_id: monster.id,
+      luck: 1,
+      total_obtained: 1,
+    });
+  }
+
+  // 8. ログ更新
+  const newPity4 = selectedRarity >= 4 ? 0 : pity4 + 1;
+  const newPity5 = selectedRarity === 5 ? 0 : pity5 + 1;
+
+  await supabase.from("gacha_log").insert({
+    owner_id: user.id,
+    monster_id: monster.id,
+    rarity: selectedRarity,
+    pity_counter_4: newPity4,
+    pity_counter_5: newPity5,
+  });
+
+  return new Response(
+    JSON.stringify({
+      monster,
+      isNew,
+      rarity: selectedRarity,
+      remainingOrbs: currentBalance - 5,
+    }),
+    { headers: { ...cors, "Content-Type": "application/json" } }
+  );
+});
+</file>
+
 <file path="supabase/functions/sign-clip/index.ts">
 import { AwsClient } from "npm:aws4fetch@1.0.20";
 import { createClient } from "npm:@supabase/supabase-js@2.47.10";
@@ -2395,7 +2844,6 @@ export default function DashboardPage() {
   const [editLabel, setEditLabel] = useState("");
   const [editTags, setEditTags] = useState("");
 
-  // ガチャモーダル表示フラグ
   const [isGachaOpen, setIsGachaOpen] = useState(false);
 
   const supabase = createClient();
@@ -2572,11 +3020,17 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3">
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Link href="/history" className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
                 📝 間違いノート ➔
               </Link>
-              {/* ガチャ・図鑑へのボタン */}
+              {/* パーティ・ガチャ・図鑑ボタン */}
+              <Link
+                href="/party"
+                className="px-2.5 py-1 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-1"
+              >
+                ⚔️ パーティ編成
+              </Link>
               <button
                 onClick={() => setIsGachaOpen(true)}
                 className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1"

@@ -33,6 +33,8 @@ interface Monster {
   name_en: string;
   rarity: number;
   image_url: string;
+  skill_code: string;
+  stat_voc: number;
 }
 
 export default function ClipPage() {
@@ -40,7 +42,8 @@ export default function ClipPage() {
   const id = params?.id as string;
 
   const [clip, setClip] = useState<any>(null);
-  const [monster, setMonster] = useState<Monster | null>(null);
+  const [targetMonster, setTargetMonster] = useState<Monster | null>(null);
+  const [leaderMonster, setLeaderMonster] = useState<Monster | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +56,10 @@ export default function ClipPage() {
 
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
+
+  // ヒント使用可能回数（VOCステータス連動）
+  const [hintCharges, setHintCharges] = useState(0);
+  const [hintsUsedCount, setHintsUsedCount] = useState(0);
 
   // ドロップ結果モーダル用ステート
   const [dropResult, setDropResult] = useState<{
@@ -73,6 +80,8 @@ export default function ClipPage() {
     async function fetchData() {
       setLoading(true);
 
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { data: clipData } = await supabase
         .from('clips')
         .select('*, videos(youtube_id, title), monsters(*)')
@@ -82,15 +91,32 @@ export default function ClipPage() {
       if (clipData) {
         setClip(clipData);
 
-        // ★ モンスターが割り当てられていれば表示。未割り当てならここで自動選出＆保存
         if (clipData.monsters) {
-          setMonster(clipData.monsters);
+          setTargetMonster(clipData.monsters);
         } else {
           const { data: allMonsters } = await supabase.from('monsters').select('*');
           if (allMonsters && allMonsters.length > 0) {
             const randomMonster = allMonsters[Math.floor(Math.random() * allMonsters.length)];
             await supabase.from('clips').update({ monster_id: randomMonster.id }).eq('id', id);
-            setMonster(randomMonster);
+            setTargetMonster(randomMonster);
+          }
+        }
+
+        // パーティのリーダー（SLOT #1）を取得
+        if (user) {
+          const { data: partyLeader } = await supabase
+            .from('party')
+            .select('monsters(*)')
+            .eq('owner_id', user.id)
+            .eq('slot', 1)
+            .maybeSingle();
+
+          if (partyLeader && partyLeader.monsters) {
+            const lMon = partyLeader.monsters as any;
+            setLeaderMonster(lMon);
+            // 語彙 (VOC) ステータスによるヒント回数算定 (最大5回)
+            const charges = Math.min(5, Math.floor((lMon.stat_voc || 0) / 400)) + 1;
+            setHintCharges(charges);
           }
         }
 
@@ -133,6 +159,20 @@ export default function ClipPage() {
 
   const handleInputChange = (key: string, value: string) => {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // 💡 ヒントスキル発動（頭文字補完）
+  const handleUseHint = (segId: string, wIdx: number, targetAnswer: string) => {
+    if (hintCharges <= 0) return;
+
+    const key = `${segId}-${wIdx}`;
+    const currentVal = userAnswers[key] || '';
+    if (currentVal.toLowerCase() === targetAnswer.toLowerCase()) return;
+
+    const firstChar = targetAnswer.charAt(0);
+    setUserAnswers((prev) => ({ ...prev, [key]: firstChar }));
+    setHintCharges((prev) => prev - 1);
+    setHintsUsedCount((prev) => prev + 1);
   };
 
   const handlePrevSegment = () => {
@@ -229,7 +269,6 @@ export default function ClipPage() {
     }
   };
 
-  // 全体チェック ＆ ドロップ判定リクエスト
   const handleCheckAllAnswers = async () => {
     setIsSubmittingSession(true);
 
@@ -313,21 +352,34 @@ export default function ClipPage() {
           </Link>
         </div>
 
-        {/* ドロップターゲット情報表示 */}
-        {monster && (
-          <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md">
-            <div className="flex items-center gap-3">
-              <img src={monster.image_url} alt={monster.name} className="w-10 h-10 object-cover rounded-lg border border-gray-700" />
-              <div>
-                <div className="text-[10px] text-amber-400 font-bold">ドロップ対象 {"★".repeat(monster.rarity)}</div>
-                <div className="text-xs font-black">{monster.name}</div>
+        {/* ドロップターゲット ＆ リーダースキル表示バー */}
+        <div className="space-y-2">
+          {targetMonster && (
+            <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md">
+              <div className="flex items-center gap-3">
+                <img src={targetMonster.image_url} alt={targetMonster.name} className="w-10 h-10 object-cover rounded-lg border border-gray-700" />
+                <div>
+                  <div className="text-[10px] text-amber-400 font-bold">ドロップ対象 {"★".repeat(targetMonster.rarity)}</div>
+                  <div className="text-xs font-black">{targetMonster.name}</div>
+                </div>
+              </div>
+              <div className="text-right text-[10px] text-gray-400 font-mono">
+                空欄0クリアで<br /><span className="text-cyan-400 font-bold">ドロップのチャンス!</span>
               </div>
             </div>
-            <div className="text-right text-[10px] text-gray-400 font-mono">
-              空欄0クリアで<br /><span className="text-cyan-400 font-bold">ドロップのチャンス!</span>
+          )}
+
+          {leaderMonster && (
+            <div className="bg-indigo-950 border border-indigo-800 text-indigo-200 p-2.5 rounded-xl flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <span>🛡️ リーダースキル: <strong>{leaderMonster.name}</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+                💡 ヒント残り: {hintCharges} 回
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* 1. プレイヤー領域 */}
         {signedUrl ? (
@@ -372,19 +424,31 @@ export default function ClipPage() {
                 const res = results[key];
 
                 const isTarget = segItems.length > 0 ? !!item : true;
+                const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
 
                 if (isTarget) {
                   return (
                     <div key={wIdx} className="inline-flex flex-col items-center">
-                      <input
-                        type="text"
-                        value={userAnswers[key] || ''}
-                        onChange={(e) => handleInputChange(key, e.target.value)}
-                        placeholder="---"
-                        className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
-                          res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
-                        }`}
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={userAnswers[key] || ''}
+                          onChange={(e) => handleInputChange(key, e.target.value)}
+                          placeholder="---"
+                          className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
+                            res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
+                          }`}
+                        />
+                        {hintCharges > 0 && !res && (
+                          <button
+                            onClick={() => handleUseHint(currentSeg.id, wIdx, targetAnswer)}
+                            className="absolute -top-2 -right-2 bg-amber-400 hover:bg-amber-500 text-black text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow"
+                            title="頭文字ヒントを使う"
+                          >
+                            💡
+                          </button>
+                        )}
+                      </div>
                       {res && (
                         <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                           {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
@@ -409,7 +473,7 @@ export default function ClipPage() {
               </div>
             )}
 
-            {/* コントロール（前後ボタン & 回答チェック & 保存） */}
+            {/* コントロール */}
             <div className="flex items-center justify-between gap-2 pt-3 border-t">
               <button
                 disabled={activeSegIndex === 0}

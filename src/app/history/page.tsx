@@ -15,17 +15,32 @@ interface Attempt {
   };
 }
 
+interface SessionSummary {
+  totalSessions: number;
+  avgRawAccuracy: number;
+  totalDroppedCount: number;
+}
+
 export default function HistoryPage() {
   const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [summary, setSummary] = useState<SessionSummary>({
+    totalSessions: 0,
+    avgRawAccuracy: 0,
+    totalDroppedCount: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
 
   const supabase = createClient();
 
-  const fetchAttempts = async () => {
+  const fetchHistoryAndAnalytics = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 1. 間違い記録一覧の取得
+    const { data: attData, error } = await supabase
       .from('attempts')
       .select('*, clips(label)')
       .eq('is_correct', false)
@@ -33,17 +48,37 @@ export default function HistoryPage() {
 
     if (error) {
       console.error('Error fetching attempts:', error);
-    } else if (data) {
-      setAttempts(data);
+    } else if (attData) {
+      setAttempts(attData);
     }
+
+    // 2. 学習セッション（play_sessions）の累積分析データ集計
+    if (user) {
+      const { data: sessData } = await supabase
+        .from('play_sessions')
+        .select('raw_accuracy, dropped_count')
+        .eq('owner_id', user.id);
+
+      if (sessData && sessData.length > 0) {
+        const total = sessData.length;
+        const avgAcc = sessData.reduce((acc, row) => acc + (row.raw_accuracy || 0), 0) / total;
+        const drops = sessData.reduce((acc, row) => acc + (row.dropped_count || 0), 0);
+
+        setSummary({
+          totalSessions: total,
+          avgRawAccuracy: Math.round(avgAcc),
+          totalDroppedCount: drops,
+        });
+      }
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
-    void fetchAttempts();
+    void fetchHistoryAndAnalytics();
   }, []);
 
-  // 全選択 / 解除
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
       setSelectedSelectedIds(attempts.map((a) => a.id));
@@ -52,24 +87,21 @@ export default function HistoryPage() {
     }
   };
 
-  // 単一選択 / 解除
   const handleToggleSelect = (id: string) => {
     setSelectedSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
 
-  // 1件削除
   const handleDeleteSingle = async (id: string) => {
     if (!confirm('この間違い記録を削除しますか？')) return;
     setDeleting(true);
     await supabase.from('attempts').delete().eq('id', id);
     setSelectedSelectedIds((prev) => prev.filter((i) => i !== id));
-    await fetchAttempts();
+    await fetchHistoryAndAnalytics();
     setDeleting(false);
   };
 
-  // 選択した項目を一括削除
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
     if (!confirm(`選択した ${selectedIds.length} 件の間違い記録を削除しますか？`)) return;
@@ -77,7 +109,7 @@ export default function HistoryPage() {
     setDeleting(true);
     await supabase.from('attempts').delete().in('id', selectedIds);
     setSelectedSelectedIds([]);
-    await fetchAttempts();
+    await fetchHistoryAndAnalytics();
     setDeleting(false);
   };
 
@@ -92,15 +124,15 @@ export default function HistoryPage() {
         {/* ヘッダー領域 */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3 print:hidden">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">📝 間違いノート・学習履歴</h1>
-            <p className="text-xs text-gray-500 mt-1">苦手な単語や文法のログを管理・削除できます</p>
+            <h1 className="text-xl font-bold text-gray-900">📝 間違いノート・学習レポート</h1>
+            <p className="text-xs text-gray-500 mt-1">累積のディクテーション分析データと誤答ログを管理できます</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={handlePrintPdf}
               className="px-3.5 py-2 bg-green-600 text-white font-bold text-xs rounded-lg hover:bg-green-700 shadow-sm transition-colors"
             >
-              📄 PDFを印刷 / 出力
+              📄 分析PDFを印刷 / 出力
             </button>
             <Link
               href="/"
@@ -113,8 +145,27 @@ export default function HistoryPage() {
 
         {/* 印刷/PDF専用ヘッダー */}
         <div className="hidden print:block border-b pb-2 mb-4">
-          <h1 className="text-2xl font-bold text-black">Dictation App - 間違いデータ分析レポート</h1>
+          <h1 className="text-2xl font-bold text-black">Dictation App - 総合学習分析レポート</h1>
           <p className="text-xs text-gray-500">出力日時: {new Date().toLocaleString()}</p>
+        </div>
+
+        {/* 分析サマリーパネル（印刷時も出力） */}
+        <div className="bg-white border rounded-2xl p-5 shadow-sm space-y-3">
+          <h2 className="text-xs font-extrabold text-gray-700 tracking-wider">📊 累積学習パフォーマンス</h2>
+          <div className="grid grid-cols-3 gap-3 font-mono text-center">
+            <div className="bg-gray-50 p-3 rounded-xl border">
+              <div className="text-[10px] text-gray-500 font-bold">総セッション数</div>
+              <div className="text-xl font-black text-gray-900 mt-0.5">{summary.totalSessions} 回</div>
+            </div>
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+              <div className="text-[10px] text-blue-600 font-bold">平均素の正答率 (raw)</div>
+              <div className="text-xl font-black text-blue-900 mt-0.5">{summary.avgRawAccuracy}%</div>
+            </div>
+            <div className="bg-purple-50 p-3 rounded-xl border border-purple-100">
+              <div className="text-[10px] text-purple-600 font-bold">獲得モンスター数</div>
+              <div className="text-xl font-black text-purple-900 mt-0.5">{summary.totalDroppedCount} 体</div>
+            </div>
+          </div>
         </div>
 
         {/* 一括操作バー */}
