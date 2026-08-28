@@ -81,14 +81,12 @@ export default function TranscriptView({ videoId }: Props) {
     }
   };
 
-  // 全文章のコピペ
   const handleCopyAll = () => {
     const fullText = segments.map((s) => s.corrected_text || s.text).join("\n");
     void navigator.clipboard.writeText(fullText);
     setMessage("📋 文字起こしの全文をクリップボードにコピーしました！");
   };
 
-  // 選択範囲のコピペ
   const handleCopySelected = () => {
     if (!selectedStart) return;
     const startIdx = selectedStart.idx;
@@ -100,6 +98,7 @@ export default function TranscriptView({ videoId }: Props) {
     setMessage("📋 選択範囲の文章をクリップボードにコピーしました！");
   };
 
+  // ★ オーブ5個を消費してクリップ作成＆モンスター割り当て
   const handleCreateClip = async () => {
     if (!selectedStart) return;
 
@@ -113,6 +112,33 @@ export default function TranscriptView({ videoId }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("ログインしていません。");
 
+      // 1. オーブ残高確認
+      const { data: bal } = await supabase
+        .from("orb_balance")
+        .select("balance")
+        .eq("owner_id", user.id)
+        .single();
+
+      if ((bal?.balance ?? 0) < 5) {
+        throw new Error("オーブが足りません（必要: 5個）。ログインボーナス等でオーブを獲得してください。");
+      }
+
+      // 2. モンスターをランダムに1体決定（ガチャ）
+      const { data: allMonsters } = await supabase.from("monsters").select("*");
+      let assignedMonsterId = null;
+      if (allMonsters && allMonsters.length > 0) {
+        const randMon = allMonsters[Math.floor(Math.random() * allMonsters.length)];
+        assignedMonsterId = randMon.id;
+      }
+
+      // 3. オーブ5個消費ログ（orb_ledger）
+      await supabase.from("orb_ledger").insert({
+        owner_id: user.id,
+        delta: -5,
+        reason: "clip_creation_gacha",
+      });
+
+      // 4. クリップの作成（monster_id 割り当て）
       const { data: clip, error: clipErr } = await supabase
         .from("clips")
         .insert({
@@ -124,12 +150,14 @@ export default function TranscriptView({ videoId }: Props) {
           seg_to: endSeg.idx,
           label: `${(startSeg.start_ms / 1000).toFixed(1)}s - ${(endSeg.end_ms / 1000).toFixed(1)}s`,
           status: "pending",
+          monster_id: assignedMonsterId,
         })
         .select("id")
         .single();
 
       if (clipErr) throw clipErr;
 
+      // 5. エンコードジョブ送信
       await supabase.from("ingest_jobs").insert({
         owner_id: user.id,
         video_id: videoId,
@@ -140,7 +168,7 @@ export default function TranscriptView({ videoId }: Props) {
         payload: { video_id: videoId, clip_id: clip.id, start_ms: startSeg.start_ms, end_ms: endSeg.end_ms },
       });
 
-      setMessage("🎉 クリップ切り出しジョブを送信しました！");
+      setMessage("🎉 💎5オーブを消費してクリップ切り出し＆モンスター割り当て完了！");
       setSelectedStart(null);
       setSelectedEnd(null);
     } catch (err: any) {
@@ -186,8 +214,8 @@ export default function TranscriptView({ videoId }: Props) {
           <button onClick={handleCopySelected} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-100">
             📋 選択文をコピー
           </button>
-          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md text-sm hover:bg-blue-700 disabled:opacity-50">
-            {isSubmitting ? "送信中..." : "この区間でクリップ作成"}
+          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-md text-sm hover:opacity-90 disabled:opacity-50 shadow-sm flex items-center gap-1">
+            <span>💎5</span> {isSubmitting ? "切り出し中..." : "この区間でクリップガチャ作成"}
           </button>
         </div>
       )}

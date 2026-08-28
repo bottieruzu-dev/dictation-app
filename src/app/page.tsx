@@ -13,6 +13,13 @@ interface Video {
   created_at: string;
 }
 
+interface Monster {
+  id: number;
+  name: string;
+  rarity: number;
+  image_url: string;
+}
+
 interface Clip {
   id: string;
   label: string | null;
@@ -23,6 +30,9 @@ interface Clip {
   difficulty_score?: number | null;
   difficulty_tier?: string | null;
   effective_wpm?: number | null;
+  monster_id?: number | null;
+  monsters?: Monster | null;
+  user_luck?: number; // 現在のラック
   videos?: {
     youtube_id: string;
     title: string;
@@ -66,11 +76,15 @@ export default function DashboardPage() {
     if (!signedIn) return;
     setLoading(true);
 
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 1. オーブ残高
     const { data: orbRes, error: orbErr } = await supabase.rpc("ensure_initial_orbs");
     if (!orbErr && orbRes !== null) {
       setOrbCount(orbRes);
     }
 
+    // 2. 動画一覧
     const { data: vData } = await supabase
       .from("videos")
       .select("id, youtube_id, title, status, created_at")
@@ -78,13 +92,36 @@ export default function DashboardPage() {
 
     if (vData) setVideos(vData);
 
+    // 3. ユーザーのMonster所持ラック情報取得
+    let luckMap: Record<number, number> = {};
+    if (user) {
+      const { data: uMonData } = await supabase
+        .from("user_monsters")
+        .select("monster_id, luck")
+        .eq("owner_id", user.id);
+
+      if (uMonData) {
+        uMonData.forEach((row) => {
+          luckMap[row.monster_id] = row.luck;
+        });
+      }
+    }
+
+    // 4. クリップ一覧（モンスター情報結合）
     const { data: cData } = await supabase
       .from("clips")
-      .select("*, videos(youtube_id, title)")
+      .select("*, videos(youtube_id, title), monsters(*)")
       .order("created_at", { ascending: false });
 
-    if (cData) setClips(cData);
+    if (cData) {
+      const formattedClips: Clip[] = cData.map((c: any) => ({
+        ...c,
+        user_luck: c.monster_id ? (luckMap[c.monster_id] ?? 0) : 0,
+      }));
+      setClips(formattedClips);
+    }
 
+    // 5. ストレージ使用量
     const { data: assetData } = await supabase
       .from("clip_assets")
       .select("video_bytes");
@@ -213,7 +250,8 @@ export default function DashboardPage() {
     const labelMatch = (c.label || "").toLowerCase().includes(q);
     const tagMatch = (c.tags || []).some((t) => t.toLowerCase().includes(q));
     const tierMatch = (c.difficulty_tier || "").toLowerCase().includes(q);
-    return labelMatch || tagMatch || tierMatch;
+    const monsterMatch = (c.monsters?.name || "").toLowerCase().includes(q);
+    return labelMatch || tagMatch || tierMatch || monsterMatch;
   });
 
   const filteredVideos = videos.filter((v) =>
@@ -232,7 +270,6 @@ export default function DashboardPage() {
               <Link href="/history" className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
                 📝 間違いノート ➔
               </Link>
-              {/* パーティ・ガチャ・図鑑ボタン */}
               <Link
                 href="/party"
                 className="px-2.5 py-1 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-1"
@@ -243,7 +280,7 @@ export default function DashboardPage() {
                 onClick={() => setIsGachaOpen(true)}
                 className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1"
               >
-                🔮 召喚 (ガチャ)
+                🔮 召喚 (単体ガチャ)
               </button>
               <Link
                 href="/monsters"
@@ -295,7 +332,7 @@ export default function DashboardPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="🔍 題名、タグ、難易度（初級、上級など）で検索..."
+            placeholder="🔍 題名、タグ、難易度、モンスター名で検索..."
             className="w-full border bg-white rounded-xl px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-500"
           />
 
@@ -333,22 +370,29 @@ export default function DashboardPage() {
                 {filteredClips.map((clip) => {
                   const ytId = clip.videos?.youtube_id;
                   const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
+                  const mon = clip.monsters;
+                  const currentLuck = clip.user_luck ?? 0;
+                  const remainingLuck = Math.max(0, 99 - currentLuck);
+                  const isLuckMax = currentLuck >= 99;
 
                   return (
                     <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
-                      {thumbUrl && (
-                        <div className="aspect-video bg-black relative">
+                      {/* サムネイル ＆ 難易度バッジ */}
+                      <div className="aspect-video bg-black relative">
+                        {thumbUrl ? (
                           <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
-                          {clip.difficulty_tier && (
-                            <span className={`absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-sm ${getTierBadgeStyle(clip.difficulty_tier)}`}>
-                              {clip.difficulty_tier} (Score: {clip.difficulty_score ?? 0})
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        ) : (
+                          <div className="w-full h-full bg-gray-800" />
+                        )}
+                        {clip.difficulty_tier && (
+                          <span className={`absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shadow-sm ${getTierBadgeStyle(clip.difficulty_tier)}`}>
+                            {clip.difficulty_tier} ({clip.difficulty_score ?? 0})
+                          </span>
+                        )}
+                      </div>
 
                       <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                           <div className="flex justify-between items-start">
                             <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600 line-clamp-1">
                               {clip.label || "無題のクリップ"}
@@ -373,9 +417,30 @@ export default function DashboardPage() {
                             </div>
                           </div>
 
-                          {clip.effective_wpm && (
-                            <div className="text-[10px] text-gray-500 font-mono">
-                              実効WPM: {clip.effective_wpm}
+                          {/* ★ モンスター ＆ ラック（運極）表示 */}
+                          {mon ? (
+                            <div className="bg-gray-900 text-white p-2.5 rounded-xl flex items-center justify-between shadow-inner">
+                              <div className="flex items-center gap-2.5">
+                                <img src={mon.image_url} alt={mon.name} className="w-9 h-9 object-cover rounded-lg border border-gray-700" />
+                                <div>
+                                  <div className="text-[9px] text-amber-400 font-bold">{"★".repeat(mon.rarity)}</div>
+                                  <div className="text-xs font-black truncate max-w-[110px]">{mon.name}</div>
+                                </div>
+                              </div>
+                              <div className="text-right font-mono">
+                                <div className="text-xs font-bold text-cyan-300">☘️ ラック {currentLuck}</div>
+                                <div className="text-[9px] text-gray-400">
+                                  {isLuckMax ? (
+                                    <span className="text-amber-400 font-bold animate-pulse">👑 運極達成!</span>
+                                  ) : (
+                                    <span>運極まで あと {remainingLuck} 体</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-gray-400 bg-gray-50 p-2 rounded-lg text-center font-mono">
+                              モンスター未割り当て
                             </div>
                           )}
 
@@ -398,7 +463,7 @@ export default function DashboardPage() {
                           href={`/clips/${clip.id}`}
                           className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
                         >
-                          学習をスタート ➔
+                          学習して運極を目指す ➔
                         </Link>
                       </div>
                     </div>
@@ -482,7 +547,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ガチャモーダル表示 */}
         <GachaModal
           isOpen={isGachaOpen}
           onClose={() => setIsGachaOpen(false)}
