@@ -62,12 +62,11 @@ export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Pro
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "ガチャ実行エラー");
 
-      // 1.5秒演出アニメーション待機
       setTimeout(() => {
         setResult(data);
         setAnimating(false);
         onSuccess();
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
       setError(err.message);
       setAnimating(false);
@@ -90,30 +89,27 @@ export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Pro
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
       <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 text-white space-y-6 shadow-2xl relative overflow-hidden">
         
-        {/* ヘッダー */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-3">
           <h2 className="text-lg font-black tracking-wide flex items-center gap-2">
-            <span>🔮 モンスター召喚</span>
+            <span>🤝 ノーマル召喚 (フレンドガチャ枠)</span>
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-sm font-bold">
             ✕ 閉じる
           </button>
         </div>
 
-        {/* ガチャ演出領域 */}
         {animating ? (
           <div className="py-12 flex flex-col items-center justify-center space-y-4">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 animate-spin flex items-center justify-center shadow-lg shadow-purple-500/50">
-              <div className="w-20 h-20 rounded-full bg-gray-900 flex items-center justify-center text-3xl">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 animate-spin flex items-center justify-center shadow-lg shadow-teal-500/50">
+              <div className="w-16 h-16 rounded-full bg-gray-900 flex items-center justify-center text-2xl">
                 💎
               </div>
             </div>
-            <p className="text-sm font-bold tracking-widest animate-pulse text-cyan-400">
+            <p className="text-sm font-bold tracking-widest animate-pulse text-emerald-400">
               モンスターを召喚中...
             </p>
           </div>
         ) : result ? (
-          /* 結果表示 */
           <div className="space-y-4 text-center">
             <div className={`p-1 rounded-xl bg-gradient-to-b ${getRarityColor(result.monster.rarity)}`}>
               <div className="bg-gray-950 rounded-lg p-4 space-y-3">
@@ -131,7 +127,7 @@ export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Pro
                 <img
                   src={result.monster.image_url}
                   alt={result.monster.name}
-                  className="w-32 h-32 object-cover rounded-xl mx-auto border-2 border-gray-800 shadow-md"
+                  className="w-28 h-28 object-cover rounded-xl mx-auto border-2 border-gray-800 shadow-md"
                 />
 
                 <div>
@@ -143,7 +139,6 @@ export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Pro
                   "{result.monster.quote_ja}"
                 </p>
 
-                {/* ステータス */}
                 <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono bg-gray-900 p-2 rounded-lg text-gray-300">
                   <div>INT: {result.monster.stat_int}</div>
                   <div>EAR: {result.monster.stat_ear}</div>
@@ -163,12 +158,11 @@ export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Pro
             </button>
           </div>
         ) : (
-          /* 初期選択画面 */
           <div className="space-y-6 text-center py-4">
             <div className="space-y-2">
-              <div className="text-4xl">🔮</div>
+              <div className="text-4xl">🤝</div>
               <p className="text-xs text-gray-400">
-                オーブ5個を消費して召喚を行います。★4以上の強力なモンスターを獲得してステータスを強化しましょう。
+                オーブ1個で気軽に召喚できます。（★1〜★3メインの育成・ラック上げ用枠です）
               </p>
             </div>
 
@@ -180,10 +174,10 @@ export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Pro
 
             <button
               onClick={handleSummon}
-              disabled={loading || orbCount < 5}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white rounded-xl font-black text-sm shadow-lg disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+              disabled={loading || orbCount < 1}
+              className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white rounded-xl font-black text-sm shadow-lg disabled:opacity-40 transition-all flex items-center justify-center gap-2"
             >
-              <span>5 オーブで召喚する</span>
+              <span>1 オーブで召喚する</span>
               <span className="text-xs font-mono opacity-80">(所持: {orbCount}個)</span>
             </button>
           </div>

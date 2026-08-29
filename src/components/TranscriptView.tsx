@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import ClipGachaModal from "@/components/ClipGachaModal";
 
 interface Segment {
   id: string;
@@ -10,6 +11,15 @@ interface Segment {
   end_ms: number;
   text: string;
   corrected_text?: string;
+}
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  image_url: string;
+  quote_ja: string;
 }
 
 interface Props {
@@ -23,6 +33,10 @@ export default function TranscriptView({ videoId }: Props) {
   const [selectedEnd, setSelectedEnd] = useState<Segment | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  // 出現モーダル用ステート
+  const [appearedMonster, setAppearedMonster] = useState<Monster | null>(null);
+  const [isClipGachaOpen, setIsClipGachaOpen] = useState(false);
 
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [email, setEmail] = useState("");
@@ -98,7 +112,7 @@ export default function TranscriptView({ videoId }: Props) {
     setMessage("📋 選択範囲の文章をクリップボードにコピーしました！");
   };
 
-  // ★ オーブ5個を消費してクリップ作成＆モンスター割り当て
+  // ★ オーブ5個消費 ＆ ガチャ演出付きクリップ作成
   const handleCreateClip = async () => {
     if (!selectedStart) return;
 
@@ -112,7 +126,7 @@ export default function TranscriptView({ videoId }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("ログインしていません。");
 
-      // 1. オーブ残高確認
+      // 1. オーブ残高の確認
       const { data: bal } = await supabase
         .from("orb_balance")
         .select("balance")
@@ -120,25 +134,24 @@ export default function TranscriptView({ videoId }: Props) {
         .single();
 
       if ((bal?.balance ?? 0) < 5) {
-        throw new Error("オーブが足りません（必要: 5個）。ログインボーナス等でオーブを獲得してください。");
+        throw new Error("オーブが足りません（必要: 5個）。");
       }
 
-      // 2. モンスターをランダムに1体決定（ガチャ）
+      // 2. モンスターガチャ抽選（★1〜★5からランダム）
       const { data: allMonsters } = await supabase.from("monsters").select("*");
-      let assignedMonsterId = null;
+      let assignedMonster: Monster | null = null;
       if (allMonsters && allMonsters.length > 0) {
-        const randMon = allMonsters[Math.floor(Math.random() * allMonsters.length)];
-        assignedMonsterId = randMon.id;
+        assignedMonster = allMonsters[Math.floor(Math.random() * allMonsters.length)];
       }
 
-      // 3. オーブ5個消費ログ（orb_ledger）
+      // 3. オーブ消費ログ
       await supabase.from("orb_ledger").insert({
         owner_id: user.id,
         delta: -5,
         reason: "clip_creation_gacha",
       });
 
-      // 4. クリップの作成（monster_id 割り当て）
+      // 4. クリップの作成
       const { data: clip, error: clipErr } = await supabase
         .from("clips")
         .insert({
@@ -150,14 +163,14 @@ export default function TranscriptView({ videoId }: Props) {
           seg_to: endSeg.idx,
           label: `${(startSeg.start_ms / 1000).toFixed(1)}s - ${(endSeg.end_ms / 1000).toFixed(1)}s`,
           status: "pending",
-          monster_id: assignedMonsterId,
+          monster_id: assignedMonster?.id || null,
         })
         .select("id")
         .single();
 
       if (clipErr) throw clipErr;
 
-      // 5. エンコードジョブ送信
+      // 5. ジョブ送信
       await supabase.from("ingest_jobs").insert({
         owner_id: user.id,
         video_id: videoId,
@@ -168,7 +181,14 @@ export default function TranscriptView({ videoId }: Props) {
         payload: { video_id: videoId, clip_id: clip.id, start_ms: startSeg.start_ms, end_ms: endSeg.end_ms },
       });
 
-      setMessage("🎉 💎5オーブを消費してクリップ切り出し＆モンスター割り当て完了！");
+      // ★ モンスター出現演出モーダルを起動！
+      if (assignedMonster) {
+        setAppearedMonster(assignedMonster);
+        setIsClipGachaOpen(true);
+      } else {
+        setMessage("🎉 クリップを作成しました！");
+      }
+
       setSelectedStart(null);
       setSelectedEnd(null);
     } catch (err: any) {
@@ -214,8 +234,8 @@ export default function TranscriptView({ videoId }: Props) {
           <button onClick={handleCopySelected} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-100">
             📋 選択文をコピー
           </button>
-          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-md text-sm hover:opacity-90 disabled:opacity-50 shadow-sm flex items-center gap-1">
-            <span>💎5</span> {isSubmitting ? "切り出し中..." : "この区間でクリップガチャ作成"}
+          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-bold rounded-md text-sm hover:opacity-90 disabled:opacity-50 shadow-sm flex items-center gap-1">
+            <span>💎5</span> {isSubmitting ? "召喚・切り出し中..." : "この区間でクリップガチャ作成"}
           </button>
         </div>
       )}
@@ -242,6 +262,14 @@ export default function TranscriptView({ videoId }: Props) {
           );
         })}
       </div>
+
+      {/* ★ クリップモンスター出現演出モーダル */}
+      <ClipGachaModal
+        isOpen={isClipGachaOpen}
+        monster={appearedMonster}
+        onClose={() => setIsClipGachaOpen(false)}
+      />
+
     </div>
   );
 }
