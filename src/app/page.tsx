@@ -215,25 +215,50 @@ export default function DashboardPage() {
     void fetchData();
   };
 
-  const getTierBadgeStyle = (tier?: string | null) => {
+  // 難易度に応じたネオンカラー・発光定義
+  const getTierStyle = (tier?: string | null) => {
     switch (tier) {
-      case "初級": return "bg-green-100 text-green-800 border-green-300";
-      case "中級": return "bg-blue-100 text-blue-800 border-blue-300";
-      case "上級": return "bg-amber-100 text-amber-800 border-amber-300";
-      case "超上級": return "bg-purple-100 text-purple-800 border-purple-300";
-      case "超絶": return "bg-red-100 text-red-800 border-red-300";
-      default: return "bg-gray-100 text-gray-700 border-gray-300";
+      case "初級":
+        return {
+          badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-emerald-500/20",
+          cardBorder: "border-emerald-500/40 hover:border-emerald-400 hover:shadow-emerald-500/20",
+        };
+      case "中級":
+        return {
+          badge: "bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-cyan-500/20",
+          cardBorder: "border-cyan-500/40 hover:border-cyan-400 hover:shadow-cyan-500/20",
+        };
+      case "上級":
+        return {
+          badge: "bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-amber-500/20",
+          cardBorder: "border-amber-500/40 hover:border-amber-400 hover:shadow-amber-500/20",
+        };
+      case "超上級":
+        return {
+          badge: "bg-purple-500/20 text-purple-400 border-purple-500/50 shadow-purple-500/20",
+          cardBorder: "border-purple-500/40 hover:border-purple-400 hover:shadow-purple-500/20",
+        };
+      case "超絶":
+        return {
+          badge: "bg-red-500/20 text-red-400 border-red-500/50 shadow-red-500/20 animate-pulse",
+          cardBorder: "border-red-500/50 hover:border-red-400 hover:shadow-red-500/30",
+        };
+      default:
+        return {
+          badge: "bg-slate-700/50 text-slate-300 border-slate-600",
+          cardBorder: "border-slate-800 hover:border-slate-700",
+        };
     }
   };
 
   if (signedIn === false) {
     return (
-      <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-12 p-6 space-y-4 bg-white border rounded-xl shadow-sm">
-        <h2 className="text-lg font-bold text-center">サインイン</h2>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full border rounded-lg px-3 py-2 text-sm" required />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full border rounded-lg px-3 py-2 text-sm" required />
-        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">サインイン</button>
-        {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
+      <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-16 p-6 space-y-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl text-white">
+        <h2 className="text-xl font-black text-center tracking-wide">PLAYER LOGIN</h2>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
+        <button className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white py-3 rounded-xl font-black text-sm shadow-lg transition-all">ログイン</button>
+        {authError && <p className="text-red-400 text-xs text-center font-mono">{authError}</p>}
       </form>
     );
   }
@@ -254,110 +279,153 @@ export default function DashboardPage() {
   );
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-3xl mx-auto px-4 space-y-6">
+    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans py-6 selection:bg-cyan-500 selection:text-black">
+      <div className="max-w-4xl mx-auto px-4 space-y-6">
         
-        {/* ヘッダー領域 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3">
-          <div>
-            <h1 className="text-2xl font-extrabold text-gray-900">Dictation App</h1>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <Link href="/history" className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
-                📝 間違いノート ➔
-              </Link>
-              <Link
-                href="/party"
-                className="px-2.5 py-1 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-1"
-              >
-                ⚔️ パーティ編成
-              </Link>
-              <button
-                onClick={() => setIsGachaOpen(true)}
-                className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1"
-              >
-                🔮 召喚 (単体ガチャ)
-              </button>
-              <Link
-                href="/monsters"
-                className="px-2.5 py-1 bg-gray-800 text-gray-200 text-xs font-bold rounded hover:bg-gray-700 transition-colors"
-              >
-                📖 図鑑
-              </Link>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 text-right self-end sm:self-auto">
-            <div className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-1.5">
-              <span className="text-base">💎</span>
-              <div className="text-left">
-                <div className="text-[10px] font-bold opacity-80 leading-none">オーブ</div>
-                <div className="text-sm font-black font-mono leading-tight">{orbCount} 個</div>
+        {/* ================= ソシャゲ風ステータスヘッダー ================= */}
+        <header className="bg-slate-900/90 border border-slate-800/80 backdrop-blur-md rounded-2xl p-4 shadow-2xl space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            
+            {/* アプリロゴ ＆ プレイヤー情報 */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-0.5 shadow-lg shadow-purple-500/20">
+                <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-xl font-black text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-indigo-300">
+                  D
+                </div>
+              </div>
+              <div>
+                <h1 className="text-lg font-black tracking-wider text-white flex items-center gap-2">
+                  Dictation App
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-950 text-cyan-400 border border-cyan-800/50">Ver 2.0</span>
+                </h1>
+                <p className="text-[11px] text-slate-400 font-mono">ディクテーション × ソシャゲ周回</p>
               </div>
             </div>
 
-            <div>
-              <div className="text-xs font-bold text-gray-500">R2 クラウド使用量</div>
-              <div className="text-sm font-mono font-bold text-blue-600">{storageMb} MB / 10 GB</div>
+            {/* オーブ ＆ R2ストレージゲージ（ソーシャルゲームのパラメータ風） */}
+            <div className="flex items-center gap-3 self-end md:self-auto font-mono">
+              {/* オーブ数表示 */}
+              <div className="bg-gradient-to-r from-slate-950 to-slate-900 border border-cyan-500/40 px-4 py-2 rounded-xl shadow-lg flex items-center gap-2.5 relative overflow-hidden group">
+                <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="text-xl animate-pulse">💎</span>
+                <div>
+                  <div className="text-[9px] font-bold text-cyan-400/80 uppercase tracking-widest leading-none">ORB</div>
+                  <div className="text-base font-black text-cyan-300 leading-tight drop-shadow">{orbCount} <span className="text-xs font-normal">個</span></div>
+                </div>
+              </div>
+
+              {/* クラウド容量表示 */}
+              <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-right">
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">R2 STORAGE</div>
+                <div className="text-xs font-bold text-indigo-400 leading-tight mt-0.5">{storageMb} <span className="text-[10px] text-slate-500">MB / 10 GB</span></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 1. YouTube追加フォーム */}
-        <section className="bg-white p-5 border rounded-xl shadow-sm space-y-3">
-          <h2 className="text-sm font-bold text-gray-800">新規YouTube動画を追加</h2>
+          {/* ナビゲーションメタリックボタン群 */}
+          <nav className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
+            <Link
+              href="/party"
+              className="py-2.5 px-3 bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 hover:from-indigo-600 hover:to-indigo-700 active:translate-y-0.5 border border-indigo-400/30 text-white text-xs font-black rounded-xl shadow-lg shadow-indigo-950 transition-all flex items-center justify-center gap-1.5"
+            >
+              <span>⚔️</span> パーティ編成
+            </Link>
+
+            <button
+              onClick={() => setIsGachaOpen(true)}
+              className="py-2.5 px-3 bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-800 hover:from-purple-600 hover:to-indigo-700 active:translate-y-0.5 border border-purple-400/30 text-white text-xs font-black rounded-xl shadow-lg shadow-purple-950 transition-all flex items-center justify-center gap-1.5"
+            >
+              <span>🔮</span> 召喚 (ガチャ)
+            </button>
+
+            <Link
+              href="/monsters"
+              className="py-2.5 px-3 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 active:translate-y-0.5 border border-slate-700 text-slate-200 text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+            >
+              <span>📖</span> モンスター図鑑
+            </Link>
+
+            <Link
+              href="/history"
+              className="py-2.5 px-3 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 active:translate-y-0.5 border border-slate-700 text-slate-200 text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+            >
+              <span>📝</span> 間違いノート
+            </Link>
+          </nav>
+        </header>
+
+        {/* ================= YouTube追加フォーム ================= */}
+        <section className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 shadow-xl backdrop-blur-sm">
+          <h2 className="text-xs font-extrabold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>📹</span> 新規YouTube動画を取り込む
+          </h2>
           <form onSubmit={handleAddVideo} className="flex gap-2">
             <input
               type="text"
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
               placeholder="https://www.youtube.com/watch?v=..."
-              className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono transition-colors"
               required
             />
-            <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
-              {isSubmitting ? "送信中..." : "追加"}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg shadow-cyan-950/50 disabled:opacity-40 transition-all whitespace-nowrap"
+            >
+              {isSubmitting ? "解析中..." : "動画をインジェスト"}
             </button>
           </form>
-          {submitMessage && <p className="text-xs font-mono text-gray-700 bg-gray-100 p-2 rounded">{submitMessage}</p>}
+          {submitMessage && (
+            <p className="text-xs font-mono text-cyan-300 bg-cyan-950/40 border border-cyan-900 p-2.5 rounded-xl animate-fadeIn">
+              {submitMessage}
+            </p>
+          )}
         </section>
 
-        {/* 2. 検索バー & タブ切り替え */}
+        {/* ================= 検索バー ＆ メニュータブ ================= */}
         <div className="space-y-3">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="🔍 題名、タグ、難易度、モンスター名で検索..."
-            className="w-full border bg-white rounded-xl px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-500"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 題名、タグ、難易度（初級、超絶等）、モンスター名で検索..."
+              className="w-full bg-slate-900/80 border border-slate-800 rounded-xl pl-4 pr-10 py-3 text-xs text-white placeholder-slate-500 shadow-inner focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
 
-          <div className="flex border-b">
+          <div className="flex border-b border-slate-800">
             <button
               onClick={() => setActiveTab("clips")}
-              className={`flex-1 py-3 font-bold text-sm text-center border-b-2 transition-colors ${
-                activeTab === "clips" ? "border-blue-600 text-blue-600 bg-white" : "border-transparent text-gray-500 hover:text-gray-700"
+              className={`flex-1 py-3 font-black text-xs text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === "clips"
+                  ? "border-cyan-400 text-cyan-400 bg-gradient-to-t from-cyan-950/30 to-transparent"
+                  : "border-transparent text-slate-500 hover:text-slate-300"
               }`}
             >
-              ✂️ 作成済みクリップ ({filteredClips.length})
+              <span>✂️</span> 作成済みクエストクリップ ({filteredClips.length})
             </button>
             <button
               onClick={() => setActiveTab("videos")}
-              className={`flex-1 py-3 font-bold text-sm text-center border-b-2 transition-colors ${
-                activeTab === "videos" ? "border-blue-600 text-blue-600 bg-white" : "border-transparent text-gray-500 hover:text-gray-700"
+              className={`flex-1 py-3 font-black text-xs text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === "videos"
+                  ? "border-cyan-400 text-cyan-400 bg-gradient-to-t from-cyan-950/30 to-transparent"
+                  : "border-transparent text-slate-500 hover:text-slate-300"
               }`}
             >
-              📹 登録済み動画 ({filteredVideos.length})
+              <span>📹</span> 登録済み動画原本 ({filteredVideos.length})
             </button>
           </div>
         </div>
 
-        {/* 3. クリップ一覧タブ */}
+        {/* ================= クリップ一覧 (ソシャゲ・クエストカード化) ================= */}
         {activeTab === "clips" && (
           <section>
             {loading ? (
-              <p className="text-xs text-gray-500 text-center py-8">読み込み中...</p>
+              <p className="text-xs text-slate-500 font-mono text-center py-12 animate-pulse">クエストデータをロード中...</p>
             ) : filteredClips.length === 0 ? (
-              <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+              <div className="bg-slate-900/40 p-12 text-center border border-slate-800/80 rounded-2xl text-slate-500 text-xs font-mono">
                 該当するクリップが見つかりません。
               </div>
             ) : (
@@ -369,27 +437,50 @@ export default function DashboardPage() {
                   const currentLuck = clip.user_luck ?? 0;
                   const remainingLuck = Math.max(0, 99 - currentLuck);
                   const isLuckMax = currentLuck >= 99;
+                  const style = getTierStyle(clip.difficulty_tier);
 
                   return (
-                    <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
-                      <div className="aspect-video bg-black relative">
+                    <div
+                      key={clip.id}
+                      className={`bg-slate-900/80 border rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transition-all duration-200 ${style.cardBorder}`}
+                    >
+                      {/* クエストサムネイル ＆ 難易度ネオンバッジ */}
+                      <div className="aspect-video bg-black relative overflow-hidden group">
                         {thumbUrl ? (
-                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                          <img
+                            src={thumbUrl}
+                            alt="Thumbnail"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90"
+                          />
                         ) : (
-                          <div className="w-full h-full bg-gray-800" />
+                          <div className="w-full h-full bg-slate-950 flex items-center justify-center text-slate-700 font-mono text-xs">NO THUMBNAIL</div>
                         )}
+
+                        {/* 難易度バッジ */}
                         {clip.difficulty_tier && (
-                          <span className={`absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shadow-sm ${getTierBadgeStyle(clip.difficulty_tier)}`}>
-                            {clip.difficulty_tier} ({clip.difficulty_score ?? 0})
+                          <span
+                            className={`absolute top-2.5 left-2.5 px-3 py-1 rounded-full text-[10px] font-black font-mono border backdrop-blur-md shadow-lg ${style.badge}`}
+                          >
+                            {clip.difficulty_tier} (SCORE: {clip.difficulty_score ?? 0})
+                          </span>
+                        )}
+
+                        {/* WPMバッジ */}
+                        {clip.effective_wpm && (
+                          <span className="absolute bottom-2 right-2 bg-slate-950/80 backdrop-blur-md text-slate-400 font-mono text-[9px] px-2 py-0.5 rounded border border-slate-800">
+                            WPM: {clip.effective_wpm}
                           </span>
                         )}
                       </div>
 
+                      {/* クエスト詳細 ＆ ターゲットモンスター枠 */}
                       <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-start">
-                            {/* ★ 準備（出撃確認）画面へ遷移 */}
-                            <Link href={`/clips/${clip.id}/prepare`} className="font-bold text-sm text-gray-900 hover:text-blue-600 line-clamp-1">
+                        <div className="space-y-2.5">
+                          <div className="flex justify-between items-start gap-2">
+                            <Link
+                              href={`/clips/${clip.id}/prepare`}
+                              className="font-black text-sm text-white hover:text-cyan-400 transition-colors line-clamp-1"
+                            >
                               {clip.label || "無題のクリップ"}
                             </Link>
                             <div className="flex gap-1 shrink-0">
@@ -399,33 +490,43 @@ export default function DashboardPage() {
                                   setEditLabel(clip.label || "");
                                   setEditTags((clip.tags || []).join(", "));
                                 }}
-                                className="text-xs text-gray-500 hover:bg-gray-100 px-1.5 py-0.5 rounded"
+                                className="text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800 px-1.5 py-0.5 rounded transition-colors"
                               >
                                 ✏️
                               </button>
                               <button
                                 onClick={() => handleDeleteClip(clip.id)}
-                                className="text-xs text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded"
+                                className="text-xs text-slate-500 hover:text-red-400 hover:bg-red-950/50 px-1.5 py-0.5 rounded transition-colors"
                               >
                                 🗑️
                               </button>
                             </div>
                           </div>
 
+                          {/* ソシャゲ風ターゲットモンスター情報パネル */}
                           {mon ? (
-                            <div className="bg-gray-900 text-white p-2.5 rounded-xl flex items-center justify-between shadow-inner">
+                            <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between shadow-inner">
                               <div className="flex items-center gap-2.5">
-                                <img src={mon.image_url} alt={mon.name} className="w-9 h-9 object-cover rounded-lg border border-gray-700" />
+                                <img
+                                  src={mon.image_url}
+                                  alt={mon.name}
+                                  className="w-10 h-10 object-cover rounded-lg border border-slate-800 shadow"
+                                />
                                 <div>
-                                  <div className="text-[9px] text-amber-400 font-bold">{"★".repeat(mon.rarity)}</div>
-                                  <div className="text-xs font-black truncate max-w-[110px]">{mon.name}</div>
+                                  <div className="text-[9px] text-amber-400 font-bold tracking-widest">
+                                    {"★".repeat(mon.rarity)}
+                                  </div>
+                                  <div className="text-xs font-black text-slate-200 truncate max-w-[100px] sm:max-w-[120px]">
+                                    {mon.name}
+                                  </div>
                                 </div>
                               </div>
+
                               <div className="text-right font-mono">
-                                <div className="text-xs font-bold text-cyan-300">☘️ ラック {currentLuck}</div>
-                                <div className="text-[9px] text-gray-400">
+                                <div className="text-xs font-black text-cyan-400">☘️ ラック {currentLuck}</div>
+                                <div className="text-[9px] text-slate-500">
                                   {isLuckMax ? (
-                                    <span className="text-amber-400 font-bold animate-pulse">👑 運極達成!</span>
+                                    <span className="text-amber-400 font-black animate-pulse">👑 運極達成!</span>
                                   ) : (
                                     <span>運極まで あと {remainingLuck} 体</span>
                                   )}
@@ -433,18 +534,19 @@ export default function DashboardPage() {
                               </div>
                             </div>
                           ) : (
-                            <div className="text-[10px] text-gray-400 bg-gray-50 p-2 rounded-lg text-center font-mono">
+                            <div className="text-[10px] text-slate-500 bg-slate-950/50 border border-slate-900 p-2 rounded-xl text-center font-mono">
                               モンスター未割り当て
                             </div>
                           )}
 
+                          {/* タグ表示 */}
                           {clip.tags && clip.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1">
                               {clip.tags.map((t, idx) => (
                                 <button
                                   key={idx}
                                   onClick={() => setSearchQuery(t)}
-                                  className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono hover:bg-blue-50 hover:text-blue-600"
+                                  className="text-[10px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded-md font-mono border border-slate-800 hover:border-cyan-500 hover:text-cyan-400 transition-colors"
                                 >
                                   #{t}
                                 </button>
@@ -453,12 +555,12 @@ export default function DashboardPage() {
                           )}
                         </div>
 
-                        {/* ★ 準備（出撃確認）画面へ遷移 */}
+                        {/* ソシャゲ風立体出撃ボタン */}
                         <Link
                           href={`/clips/${clip.id}/prepare`}
-                          className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
+                          className="block text-center py-2.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg shadow-cyan-950/30 border border-cyan-400/20 transition-all uppercase tracking-wider"
                         >
-                          学習して運極を目指す ➔
+                          🔥 クエスト確認・出撃 ➔
                         </Link>
                       </div>
                     </div>
@@ -469,13 +571,13 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* 4. 動画一覧タブ */}
+        {/* ================= 動画原本一覧タブ ================= */}
         {activeTab === "videos" && (
           <section>
             {loading ? (
-              <p className="text-xs text-gray-500 text-center py-8">読み込み中...</p>
+              <p className="text-xs text-slate-500 font-mono text-center py-12 animate-pulse">動画データをロード中...</p>
             ) : filteredVideos.length === 0 ? (
-              <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+              <div className="bg-slate-900/40 p-12 text-center border border-slate-800/80 rounded-2xl text-slate-500 text-xs font-mono">
                 該当する動画が見つかりません。
               </div>
             ) : (
@@ -487,20 +589,20 @@ export default function DashboardPage() {
                     <Link
                       key={video.id}
                       href={`/videos/${video.id}`}
-                      className="bg-white border rounded-xl overflow-hidden shadow-sm hover:border-blue-500 transition-colors flex flex-col justify-between"
+                      className="bg-slate-900/80 border border-slate-800/80 rounded-2xl overflow-hidden shadow-lg hover:border-indigo-500 transition-all flex flex-col justify-between group"
                     >
                       {thumbUrl && (
-                        <div className="aspect-video bg-black">
-                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                        <div className="aspect-video bg-black overflow-hidden relative">
+                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90" />
                         </div>
                       )}
-                      <div className="p-3 space-y-1">
-                        <h3 className="text-sm font-bold text-gray-800 line-clamp-2">
+                      <div className="p-3.5 space-y-1.5">
+                        <h3 className="text-xs font-bold text-slate-200 line-clamp-2 group-hover:text-cyan-400 transition-colors">
                           {video.title || "（タイトル取得中）"}
                         </h3>
-                        <div className="flex justify-between items-center text-[10px] text-gray-400 font-mono">
-                          <span>{video.status}</span>
-                          <span className="text-blue-600 font-bold">文字起こしを見る ➔</span>
+                        <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-800/50">
+                          <span>STATUS: {video.status.toUpperCase()}</span>
+                          <span className="text-cyan-400 font-bold">文字起こしを見る ➔</span>
                         </div>
                       </div>
                     </Link>
@@ -513,35 +615,40 @@ export default function DashboardPage() {
 
         {/* 編集モーダル */}
         {editingClip && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl p-5 w-full max-w-sm space-y-4">
-              <h3 className="font-bold text-base">クリップ名の変更とタグ付け</h3>
-              <div className="space-y-2 text-xs">
-                <label className="block font-bold">名前</label>
-                <input
-                  type="text"
-                  value={editLabel}
-                  onChange={(e) => setEditLabel(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="例: 自己紹介の挨拶"
-                />
-                <label className="block font-bold">タグ (カンマ区切り)</label>
-                <input
-                  type="text"
-                  value={editTags}
-                  onChange={(e) => setEditTags(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2"
-                  placeholder="例: 日常会話, 初級"
-                />
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-sm space-y-4 text-white shadow-2xl">
+              <h3 className="font-black text-sm tracking-wide border-b border-slate-800 pb-2">✏️ クリップ情報編集</h3>
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-400 mb-1">クリップ名</label>
+                  <input
+                    type="text"
+                    value={editLabel}
+                    onChange={(e) => setEditLabel(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:border-cyan-500 focus:outline-none"
+                    placeholder="例: 自己紹介の挨拶"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-400 mb-1">タグ (カンマ区切り)</label>
+                  <input
+                    type="text"
+                    value={editTags}
+                    onChange={(e) => setEditTags(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:border-cyan-500 focus:outline-none"
+                    placeholder="例: 日常会話, 初級"
+                  />
+                </div>
               </div>
-              <div className="flex gap-2 justify-end">
-                <button onClick={() => setEditingClip(null)} className="px-3 py-1.5 text-xs text-gray-600">キャンセル</button>
-                <button onClick={handleSaveEdit} className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold">保存</button>
+              <div className="flex gap-2 justify-end pt-2">
+                <button onClick={() => setEditingClip(null)} className="px-3.5 py-1.5 text-xs text-slate-400 hover:text-white">キャンセル</button>
+                <button onClick={handleSaveEdit} className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black shadow-md">保存</button>
               </div>
             </div>
           </div>
         )}
 
+        {/* ガチャモーダル */}
         <GachaModal
           isOpen={isGachaOpen}
           onClose={() => setIsGachaOpen(false)}
