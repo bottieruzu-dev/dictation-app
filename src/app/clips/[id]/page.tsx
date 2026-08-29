@@ -1,349 +1,703 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { useSignedUrl } from '@/lib/useSignedUrl';
+import ClipPlayer from '@/components/ClipPlayer';
+
+interface Segment {
+  id: string;
+  idx: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  ja_text?: string;
+  corrected_text?: string;
+  skeletons?: { text: string; label: string }[];
+}
+
+interface ClozeItem {
+  id: string;
+  segment_id: string;
+  word_from: number;
+  word_to: number;
+  answer: string;
+  variants: string[];
+}
 
 interface Monster {
   id: number;
   name: string;
   name_en: string;
   rarity: number;
-  element: string;
   image_url: string;
-  quote_ja?: string;
-  stat_int: number;
-  stat_ear: number;
+  skill_code: string;
   stat_voc: number;
-  stat_foc: number;
-  stat_luk: number;
-  stat_gut: number;
-  user_monsters?: {
-    luck: number;
-  }[];
 }
 
-interface Clip {
-  id: string;
-  label: string | null;
-  difficulty_score?: number | null;
-  difficulty_tier?: string | null;
-  effective_wpm?: number | null;
-  monster_id?: number | null;
-  monsters?: Monster | null;
-  videos?: {
-    youtube_id: string;
-    title: string;
-  };
+interface PartyMonster {
+  slot: number;
+  monster: Monster;
+  used: boolean;
 }
 
-export default function PreparePage() {
+export default function ClipPage() {
   const params = useParams();
-  const router = useRouter();
-  const currentClipId = params?.id as string;
+  const id = params?.id as string;
 
-  const [currentClip, setCurrentClip] = useState<Clip | null>(null);
-  const [allClips, setAllClips] = useState<Clip[]>([]);
-  const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
+  const [clip, setClip] = useState<any>(null);
+  const [targetMonster, setTargetMonster] = useState<Monster | null>(null);
+  const [partyMonsters, setPartyMonsters] = useState<PartyMonster[]>([]);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [activeSegIndex, setActiveSegIndex] = useState(0);
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
+  const [checkedSegments, setCheckedSegments] = useState<Record<string, boolean>>({});
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [skillMessage, setSkillMessage] = useState<string | null>(null);
+
+  const [seekToTime, setSeekToTime] = useState<number | null>(null);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+
+  const [hintCharges, setHintCharges] = useState(0);
+
+  // ドロップ結果モーダル用ステート
+  const [dropResult, setDropResult] = useState<{
+    isDropped: boolean;
+    dropRateUsed: number;
+    monster: Monster;
+    newLuck: number;
+    isFirstClear: boolean;
+  } | null>(null);
+  const [isSubmittingSession, setIsSubmittingSession] = useState(false);
+
+  const { url: signedUrl } = useSignedUrl(id, 'video');
   const supabase = createClient();
 
-  const getLuckMultiplier = (luck: number) => {
-    if (luck >= 99) return 1.30;
-    if (luck >= 90) return 1.22;
-    if (luck >= 60) return 1.15;
-    if (luck >= 30) return 1.08;
-    if (luck >= 10) return 1.03;
-    return 1.0;
-  };
-
   useEffect(() => {
-    if (!currentClipId) return;
+    if (!id) return;
 
-    async function fetchPrepareData() {
+    async function fetchData() {
       setLoading(true);
 
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 1. 全クリップリストの取得 (左側ステージリスト用)
-      const { data: clipList } = await supabase
-        .from("clips")
-        .select("*, videos(youtube_id, title), monsters(*)")
-        .order("created_at", { ascending: false });
+      const { data: clipData } = await supabase
+        .from('clips')
+        .select('*, videos(youtube_id, title), monsters(*)')
+        .eq('id', id)
+        .maybeSingle();
 
-      if (clipList) {
-        setAllClips(clipList as Clip[]);
-        const active = clipList.find((c) => c.id === currentClipId) as Clip;
-        if (active) setCurrentClip(active);
-      }
+      if (clipData) {
+        setClip(clipData);
 
-      // 2. 出撃パーティ3体の取得
-      if (user) {
-        const { data: mData } = await supabase
-          .from("user_monsters")
-          .select("monsters(*), luck")
-          .eq("owner_id", user.id);
-
-        if (mData) {
-          const list: Monster[] = mData.map((item: any) => ({
-            ...item.monsters,
-            user_monsters: [{ luck: item.luck }],
-          }));
-
-          const { data: pData } = await supabase
-            .from("party")
-            .select("slot, monster_id")
-            .eq("owner_id", user.id)
-            .order("slot", { ascending: true });
-
-          if (pData) {
-            const slots: (Monster | null)[] = [null, null, null];
-            pData.forEach((p) => {
-              const found = list.find((m) => m.id === p.monster_id);
-              if (found && p.slot >= 1 && p.slot <= 3) {
-                slots[p.slot - 1] = found;
-              }
-            });
-            setPartySlots(slots);
+        if (clipData.monsters) {
+          setTargetMonster(clipData.monsters);
+        } else {
+          const { data: allMonsters } = await supabase.from('monsters').select('*');
+          if (allMonsters && allMonsters.length > 0) {
+            const randomMonster = allMonsters[Math.floor(Math.random() * allMonsters.length)];
+            await supabase.from('clips').update({ monster_id: randomMonster.id }).eq('id', id);
+            setTargetMonster(randomMonster);
           }
         }
+
+        // パーティ3体全取得
+        if (user) {
+          const { data: pList } = await supabase
+            .from('party')
+            .select('slot, monsters(*)')
+            .eq('owner_id', user.id)
+            .order('slot', { ascending: true });
+
+          if (pList) {
+            const formatted: PartyMonster[] = pList.map((p) => ({
+              slot: p.slot,
+              monster: p.monsters as any,
+              used: false,
+            }));
+            setPartyMonsters(formatted);
+
+            const leader = formatted.find((p) => p.slot === 1);
+            if (leader) {
+              const charges = Math.min(5, Math.floor((leader.monster.stat_voc || 0) / 400)) + 1;
+              setHintCharges(charges);
+            }
+          }
+        }
+
+        const { data: segData } = await supabase
+          .from('segments')
+          .select('*')
+          .eq('video_id', clipData.video_id)
+          .gte('idx', clipData.seg_from ?? 0)
+          .lte('idx', clipData.seg_to ?? 9999)
+          .order('idx', { ascending: true });
+
+        if (segData) setSegments(segData);
+
+        const { data: itemData } = await supabase
+          .from('cloze_items')
+          .select('*')
+          .eq('clip_id', id);
+
+        if (itemData) setClozeItems(itemData);
       }
 
       setLoading(false);
     }
 
-    void fetchPrepareData();
-  }, [currentClipId, supabase]);
+    fetchData();
+  }, [id]);
 
-  // パーティ合計ステータス計算
-  const calculateTotalStats = () => {
-    let intSum = 0, earSum = 0;
-    partySlots.forEach((m) => {
-      if (!m) return;
-      const luck = m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 1;
-      const mult = getLuckMultiplier(luck);
-      intSum += Math.round(m.stat_int * mult);
-      earSum += Math.round(m.stat_ear * mult);
+  useEffect(() => {
+    if (segments.length === 0) return;
+    const foundIdx = segments.findIndex((seg) => {
+      const startSec = (seg.start_ms || 0) / 1000;
+      const endSec = (seg.end_ms || 0) / 1000;
+      return currentVideoTime >= startSec && currentVideoTime <= endSec;
     });
 
-    return {
-      xpMult: Math.min(2.5, 1.0 + intSum * 0.0008).toFixed(2),
-      earDropBonus: Math.min(20.0, earSum * 0.006).toFixed(1),
-    };
+    if (foundIdx !== -1 && foundIdx !== activeSegIndex) {
+      setActiveSegIndex(foundIdx);
+    }
+  }, [currentVideoTime, segments]);
+
+  const handleInputChange = (key: string, value: string) => {
+    setUserAnswers((prev) => ({ ...prev, [key]: value }));
   };
 
-  const getTierBadgeStyle = (tier?: string | null) => {
-    switch (tier) {
-      case "初級": return "bg-emerald-500/20 text-emerald-400 border-emerald-500/50";
-      case "中級": return "bg-cyan-500/20 text-cyan-400 border-cyan-500/50";
-      case "上級": return "bg-amber-500/20 text-amber-400 border-amber-500/50";
-      case "超上級": return "bg-purple-500/20 text-purple-400 border-purple-500/50";
-      case "超絶": return "bg-red-500/20 text-red-400 border-red-500/50 animate-pulse";
-      default: return "bg-slate-700/50 text-slate-300 border-slate-600";
+  const handleUseHint = (segId: string, wIdx: number, targetAnswer: string) => {
+    if (hintCharges <= 0) return;
+
+    const key = `${segId}-${wIdx}`;
+    const currentVal = userAnswers[key] || '';
+    if (currentVal.toLowerCase() === targetAnswer.toLowerCase()) return;
+
+    const firstChar = targetAnswer.charAt(0);
+    setUserAnswers((prev) => ({ ...prev, [key]: firstChar }));
+    setHintCharges((prev) => prev - 1);
+  };
+
+  // スキル発動処理
+  const handleActivateMonsterSkill = (slotIdx: number) => {
+    const pm = partyMonsters.find((p) => p.slot === slotIdx);
+    if (!pm || pm.used) return;
+
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const newAnswers = { ...userAnswers };
+
+    let effectApplied = false;
+
+    if (pm.monster.skill_code === 'VOCAB_HINT_1' || pm.monster.skill_code === 'COMBO_PROTECT_1') {
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        const key = `${currentSeg.id}-${wIdx}`;
+        const targetAns = item ? item.answer : words[wIdx].replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!newAnswers[key] || newAnswers[key].trim().toLowerCase() !== targetAns.toLowerCase()) {
+          newAnswers[key] = targetAns;
+          effectApplied = true;
+          setSkillMessage(`⚡ スキル発動【${pm.monster.name}】: 空欄1つを完全クリア！`);
+          break;
+        }
+      }
+    } else {
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        const key = `${currentSeg.id}-${wIdx}`;
+        const targetAns = item ? item.answer : words[wIdx].replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!newAnswers[key] && targetAns.length > 0) {
+          newAnswers[key] = targetAns.charAt(0);
+          effectApplied = true;
+        }
+      }
+      setSkillMessage(`⚡ スキル発動【${pm.monster.name}】: 現在の文章の頭文字を解放！`);
+    }
+
+    if (effectApplied) {
+      setUserAnswers(newAnswers);
+      setPartyMonsters((prev) =>
+        prev.map((p) => (p.slot === slotIdx ? { ...p, used: true } : p))
+      );
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-400 p-8 flex items-center justify-center text-xs font-mono tracking-widest">
-        LOADING STAGE HUD...
-      </div>
-    );
-  }
+  const handlePrevSegment = () => {
+    if (activeSegIndex > 0) {
+      const newIdx = activeSegIndex - 1;
+      setActiveSegIndex(newIdx);
+      setSeekToTime(segments[newIdx].start_ms / 1000);
+      setSaveMessage(null);
+      setSkillMessage(null);
+    }
+  };
 
-  const targetMon = currentClip?.monsters;
-  const ytId = currentClip?.videos?.youtube_id;
-  const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
-  const stats = calculateTotalStats();
+  const handleNextSegment = () => {
+    if (activeSegIndex < segments.length - 1) {
+      const newIdx = activeSegIndex + 1;
+      setActiveSegIndex(newIdx);
+      setSeekToTime(segments[newIdx].start_ms / 1000);
+      setSaveMessage(null);
+      setSkillMessage(null);
+    }
+  };
+
+  const checkSingleSegment = async (segId: string) => {
+    setSaveMessage(null);
+    const seg = segments.find((s) => s.id === segId);
+    if (!seg) return;
+
+    const words = (seg.corrected_text || seg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+    const newResults = { ...results };
+
+    let wrongCount = 0;
+
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const word = words[wIdx];
+      const key = `${seg.id}-${wIdx}`;
+      const item = segItems.find((it) => it.word_from === wIdx);
+
+      const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+      const userInput = (userAnswers[key] || '').trim().toLowerCase();
+      const gold = targetAnswer.trim().toLowerCase();
+      const isCorrect = userInput === gold;
+
+      if (!isCorrect) wrongCount++;
+
+      newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+    }
+
+    setResults(newResults);
+    setCheckedSegments((prev) => ({ ...prev, [segId]: true }));
+
+    if (wrongCount > 0) {
+      await saveMistakesToDb(segId, newResults);
+    }
+  };
+
+  const saveMistakesToDb = async (segId: string, currentResults = results) => {
+    const seg = segments.find((s) => s.id === segId);
+    if (!seg) return;
+
+    const words = (seg.corrected_text || seg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setSaveMessage('🚨 ログインが必要です');
+      return;
+    }
+
+    let savedCount = 0;
+
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const key = `${seg.id}-${wIdx}`;
+      const res = currentResults[key];
+
+      if (res && !res.isCorrect) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        await supabase.from('attempts').insert({
+          owner_id: user.id,
+          clip_id: id,
+          segment_id: seg.id,
+          item_id: item?.id || null,
+          input_raw: userAnswers[key] || '',
+          answer_gold: res.answer,
+          score: 0.0,
+          is_correct: false,
+        });
+        savedCount++;
+      }
+    }
+
+    if (savedCount > 0) {
+      setSaveMessage(`💾 ${savedCount} 件の間違いをノートに保存しました！`);
+    } else {
+      setSaveMessage('🎉 全問正解です！保存する間違いはありません。');
+    }
+  };
+
+  const handleCheckAllAnswers = async () => {
+    setIsSubmittingSession(true);
+
+    let totalTargetCount = 0;
+    let totalCorrectCount = 0;
+    let filledCount = 0;
+
+    for (const seg of segments) {
+      const words = (seg.corrected_text || seg.text).split(' ');
+      const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const word = words[wIdx];
+        const key = `${seg.id}-${wIdx}`;
+        const item = segItems.find((it) => it.word_from === wIdx);
+
+        const isTarget = segItems.length > 0 ? !!item : true;
+
+        if (isTarget) {
+          totalTargetCount++;
+          const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+          const userInput = (userAnswers[key] || '').trim().toLowerCase();
+          if (userInput !== '') filledCount++;
+
+          if (userInput === targetAnswer.trim().toLowerCase()) {
+            totalCorrectCount++;
+          }
+        }
+      }
+      await checkSingleSegment(seg.id);
+    }
+
+    const rawAccuracy = totalTargetCount > 0 ? (totalCorrectCount / totalTargetCount) * 100 : 0;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/drop`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              clipId: id,
+              rawAccuracy: Math.round(rawAccuracy),
+              blankTotal: totalTargetCount,
+              blankFilled: filledCount,
+            }),
+          }
+        );
+
+        const data = await res.json();
+        if (res.ok) {
+          setDropResult(data);
+        }
+      }
+    } catch (err) {
+      console.error('Drop error:', err);
+    } finally {
+      setIsSubmittingSession(false);
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center text-gray-500">読み込み中...</div>;
+
+  const currentSeg = segments[activeSegIndex];
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans p-4 sm:p-6 flex flex-col justify-between selection:bg-cyan-500 selection:text-black">
-      
-      {/* 画面トップ：ヘッダーナビゲーション */}
-      <header className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all"
-          >
-            ◀ メインハブに戻る
-          </Link>
-          <h1 className="text-lg font-black tracking-wider uppercase flex items-center gap-2">
-            <span>⚔️</span> クエスト出撃準備 (STAGE SELECT)
-          </h1>
-        </div>
-      </header>
-
-      {/* メインハブ 2カラム領域（画像1再現） */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-stretch">
+    <main className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-xl mx-auto px-4 space-y-6">
         
-        {/* ================= 左側：ダンジョン / クリップ選択リスト (4カラム) ================= */}
-        <div className="lg:col-span-4 bg-slate-900/80 border border-slate-800/90 rounded-2xl p-4 flex flex-col space-y-3 shadow-2xl backdrop-blur-md max-h-[720px] overflow-y-auto">
-          <div className="text-xs font-black tracking-widest text-slate-400 uppercase font-mono border-b border-slate-800 pb-2 flex justify-between">
-            <span>SELECT STAGE</span>
-            <span className="text-cyan-400">{allClips.length} STAGES</span>
+        <div className="flex items-center justify-between border-b pb-3">
+          <h1 className="text-lg font-bold text-gray-900">
+            {clip?.label || 'ディクテーション穴埋め'}
+          </h1>
+          <Link href={`/clips/${id}/prepare`} className="text-sm text-blue-600 hover:underline font-bold">
+            ← 出撃準備に戻る
+          </Link>
+        </div>
+
+        {/* ドロップターゲット情報 */}
+        {targetMonster && (
+          <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-3">
+              <img src={targetMonster.image_url} alt={targetMonster.name} className="w-10 h-10 object-cover rounded-lg border border-gray-700" />
+              <div>
+                <div className="text-[10px] text-amber-400 font-bold">ドロップ対象 {"★".repeat(targetMonster.rarity)}</div>
+                <div className="text-xs font-black">{targetMonster.name}</div>
+              </div>
+            </div>
+            <div className="text-right text-[10px] text-gray-400 font-mono">
+              空欄0クリアで<br /><span className="text-cyan-400 font-bold">ドロップのチャンス!</span>
+            </div>
+          </div>
+        )}
+
+        {/* パーティ3体 ＆ スキルバー */}
+        <div className="bg-indigo-950 border border-indigo-800 text-white p-3 rounded-2xl space-y-2 shadow-lg">
+          <div className="flex justify-between items-center text-xs font-mono border-b border-indigo-900 pb-1.5">
+            <span className="font-bold text-indigo-300">⚔️ パーティモンスター (タップで固有スキル発動)</span>
+            <span className="text-[10px] text-cyan-300 font-bold">💡 ヒント可能: {hintCharges} 回</span>
           </div>
 
-          <div className="space-y-2.5">
-            {allClips.map((c) => {
-              const isSelected = c.id === currentClipId;
-              const mon = c.monsters;
-
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => router.push(`/clips/${c.id}/prepare`)}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden ${
-                    isSelected
-                      ? "bg-gradient-to-r from-cyan-950/80 to-indigo-950/80 border-cyan-400/80 ring-2 ring-cyan-500/20 shadow-lg shadow-cyan-950/50"
-                      : "bg-slate-950/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/60"
+          {partyMonsters.length === 0 ? (
+            <div className="text-[11px] text-gray-400 text-center py-1 font-mono">
+              パーティ未設定です。<Link href="/party" className="text-cyan-400 underline font-bold">パーティ編成画面</Link> で設定できます。
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {partyMonsters.map((p) => (
+                <button
+                  key={p.slot}
+                  disabled={p.used}
+                  onClick={() => handleActivateMonsterSkill(p.slot)}
+                  className={`p-2 rounded-xl border text-center transition-all flex flex-col items-center justify-between ${
+                    p.used
+                      ? "bg-gray-900 border-gray-800 opacity-40 grayscale cursor-not-allowed"
+                      : "bg-indigo-900/80 border-indigo-600 hover:border-cyan-400 hover:scale-105 active:scale-95 cursor-pointer shadow-md"
                   }`}
                 >
-                  {/* 選択時ハイライトサイドライン */}
-                  {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-400" />}
+                  <div className="text-[9px] text-amber-400 font-mono">SLOT #{p.slot}</div>
+                  <img src={p.monster.image_url} alt={p.monster.name} className="w-10 h-10 object-cover rounded-lg my-1 border border-indigo-500/50" />
+                  <div className="text-[10px] font-bold truncate w-full">{p.monster.name}</div>
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded mt-1 ${p.used ? "bg-gray-800 text-gray-500" : "bg-cyan-500 text-black animate-pulse"}`}>
+                    {p.used ? "USED" : "SKILL READY"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-                  <div className="space-y-1 flex-1 truncate pl-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-black font-mono border ${getTierBadgeStyle(c.difficulty_tier)}`}>
-                        {c.difficulty_tier || "中級"}
-                      </span>
-                      {c.effective_wpm && (
-                        <span className="text-[9px] text-slate-500 font-mono">WPM {c.effective_wpm}</span>
+        {/* 1. プレイヤー領域 */}
+        {signedUrl ? (
+          <ClipPlayer
+            src={signedUrl}
+            seekToTime={seekToTime}
+            onTimeUpdate={(t) => setCurrentVideoTime(t)}
+          />
+        ) : (
+          <div className="p-8 bg-amber-50 border border-amber-200 rounded-xl text-center text-xs text-amber-800">
+            動画準備中...
+          </div>
+        )}
+
+        {/* 2. フォーカス学習カード */}
+        {currentSeg && (
+          <div className="bg-white border-2 border-blue-500 rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div className="flex items-center gap-2">
+                <span className="bg-blue-600 text-white font-mono text-xs font-bold px-2.5 py-0.5 rounded-full">
+                  #{ (activeSegIndex + 1).toString().padStart(2, '0') } / { segments.length }
+                </span>
+                <span className="text-xs text-gray-400 font-mono">
+                  ({ ((currentSeg.start_ms || 0) / 1000).toFixed(1) }s - { ((currentSeg.end_ms || 0) / 1000).toFixed(1) }s)
+                </span>
+              </div>
+
+              <button
+                onClick={() => setSeekToTime(currentSeg.start_ms / 1000)}
+                className="px-2.5 py-1 bg-blue-50 text-blue-700 font-bold rounded-lg text-xs hover:bg-blue-100 transition-colors flex items-center gap-1"
+              >
+                ▶️ この文を再生
+              </button>
+            </div>
+
+            {skillMessage && (
+              <div className="p-2.5 bg-cyan-50 border border-cyan-300 text-cyan-900 text-xs font-black rounded-xl text-center animate-bounce shadow-sm">
+                {skillMessage}
+              </div>
+            )}
+
+            {/* 穴埋め入力エリア */}
+            <div className="flex flex-wrap gap-2 items-center font-mono py-2 min-h-[60px]">
+              { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
+                const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+                const key = `${currentSeg.id}-${wIdx}`;
+                const item = segItems.find((it) => it.word_from === wIdx);
+                const res = results[key];
+
+                const isTarget = segItems.length > 0 ? !!item : true;
+                const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+
+                if (isTarget) {
+                  return (
+                    <div key={wIdx} className="inline-flex flex-col items-center">
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={userAnswers[key] || ''}
+                          onChange={(e) => handleInputChange(key, e.target.value)}
+                          placeholder="---"
+                          className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
+                            res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
+                          }`}
+                        />
+                        {hintCharges > 0 && !res && (
+                          <button
+                            onClick={() => handleUseHint(currentSeg.id, wIdx, targetAnswer)}
+                            className="absolute -top-2 -right-2 bg-amber-400 hover:bg-amber-500 text-black text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow"
+                            title="頭文字ヒントを使う"
+                          >
+                            💡
+                          </button>
+                        )}
+                      </div>
+                      {res && (
+                        <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                          {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
+                        </span>
                       )}
                     </div>
-                    <div className={`text-xs font-black truncate ${isSelected ? "text-cyan-300" : "text-slate-200"}`}>
-                      {c.label || "無題のクリップ"}
-                    </div>
-                  </div>
+                  );
+                }
 
-                  {/* ターゲットモンスターのミニ枠 */}
-                  {mon && (
-                    <img src={mon.image_url} alt={mon.name} className="w-9 h-9 object-cover rounded-lg border border-slate-800 shrink-0" />
-                  )}
+                return (
+                  <span key={wIdx} className="text-sm font-bold text-gray-800">
+                    {word}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* 保存メッセージ */}
+            {saveMessage && (
+              <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-800 text-xs font-bold rounded-lg text-center">
+                {saveMessage}
+              </div>
+            )}
+
+            {/* コントロール */}
+            <div className="flex items-center justify-between gap-2 pt-3 border-t">
+              <button
+                disabled={activeSegIndex === 0}
+                onClick={handlePrevSegment}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ⬅️ 前の文
+              </button>
+
+              <div className="flex gap-1">
+                <button
+                  onClick={() => checkSingleSegment(currentSeg.id)}
+                  className="px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
+                >
+                  この文章をチェック
+                </button>
+
+                {checkedSegments[currentSeg.id] && (
+                  <button
+                    onClick={() => saveMistakesToDb(currentSeg.id)}
+                    className="px-3 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm"
+                  >
+                    💾 間違いを保存
+                  </button>
+                )}
+              </div>
+
+              <button
+                disabled={activeSegIndex === segments.length - 1}
+                onClick={handleNextSegment}
+                className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                次の文 ➡️
+              </button>
+            </div>
+
+            {/* 解説・日本語訳 */}
+            {checkedSegments[currentSeg.id] && (
+              <div className="space-y-2 pt-3 border-t border-dashed">
+                {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
+                  <div className="space-y-1">
+                    {currentSeg.skeletons.map((sk, idx) => (
+                      <div key={idx} className="text-xs bg-blue-50 text-blue-800 p-2 rounded-lg font-semibold">
+                        💡 構文: <strong>{sk.text}</strong> ({sk.label})
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {currentSeg.ja_text && (
+                  <div className="text-xs bg-gray-50 text-gray-700 p-2 rounded-lg">
+                    💡 <strong>訳:</strong> {currentSeg.ja_text}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. 全文章リスト */}
+        <div className="bg-white border rounded-xl p-5 space-y-4 shadow-sm">
+          <div className="flex justify-between items-center border-b pb-2">
+            <h2 className="text-sm font-bold text-gray-800">全文章リスト ({segments.length}文)</h2>
+            <button
+              onClick={handleCheckAllAnswers}
+              disabled={isSubmittingSession}
+              className="px-3.5 py-2 bg-green-600 text-white rounded-lg font-bold text-xs hover:bg-green-700 disabled:opacity-50 shadow-sm"
+            >
+              {isSubmittingSession ? '判定中...' : '全体を一括チェック＆判定'}
+            </button>
+          </div>
+
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {segments.map((seg, idx) => {
+              const isCurrent = idx === activeSegIndex;
+              return (
+                <div
+                  key={seg.id}
+                  onClick={() => {
+                    setActiveSegIndex(idx);
+                    setSeekToTime(seg.start_ms / 1000);
+                    setSaveMessage(null);
+                    setSkillMessage(null);
+                  }}
+                  className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-colors flex justify-between items-center ${
+                    isCurrent ? 'bg-blue-50 border-blue-500 font-bold text-blue-900' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="font-mono">#{ (idx + 1).toString().padStart(2, '0') }</span>
+                  <span className="truncate max-w-[280px] font-mono">{ seg.corrected_text || seg.text }</span>
+                  <span className="text-[10px] text-gray-400 font-mono">{ ((seg.start_ms || 0) / 1000).toFixed(1) }s</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* ================= 右側：特大メインビジュアル ＆ 詳細パネル (8カラム) ================= */}
-        <div className="lg:col-span-8 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden">
-          
-          {/* バックグラウンドシネマティックアート（グラデーションオーバーレイ） */}
-          {thumbUrl && (
-            <div className="absolute inset-0 z-0 pointer-events-none opacity-20 overflow-hidden">
-              <img src={thumbUrl} alt="Background Art" className="w-full h-full object-cover filter blur-sm scale-110" />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent" />
-            </div>
-          )}
-
-          <div className="relative z-10 space-y-5">
-            {/* ステージタイトル ＆ 概要 */}
-            <div className="space-y-2 border-b border-slate-800/80 pb-4">
-              <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-black font-mono border ${getTierBadgeStyle(currentClip?.difficulty_tier)}`}>
-                  {currentClip?.difficulty_tier || "中級"} (SCORE: {currentClip?.difficulty_score ?? 0})
+        {/* ドロップ結果表示モーダル */}
+        {dropResult && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="bg-gray-900 border border-gray-800 text-white p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+              {dropResult.isFirstClear && (
+                <span className="bg-amber-500 text-black font-black px-3 py-1 rounded-full text-xs animate-bounce inline-block">
+                  🎉 初回クリア！確定ドロップ！
                 </span>
-                <span className="text-xs font-mono text-cyan-400/80">RECOMMENDED SOLO STAGE</span>
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-wide">
-                {currentClip?.label || "ディクテーションダンジョン"}
-              </h2>
-              <p className="text-xs text-slate-400 font-mono leading-relaxed">
-                動画原本: {currentClip?.videos?.title || "英語リスニングトレーニング"}
-              </p>
-            </div>
+              )}
 
-            {/* ドロップ報酬枠 (画像1・2再現：正方形メタリックアイコン並び) */}
-            <div className="space-y-2.5">
-              <div className="text-xs font-black text-slate-400 font-mono uppercase tracking-wider">
-                🎁 クエストドロップ ＆ 獲得可能リソース
-              </div>
-
-              <div className="flex items-center gap-3 flex-wrap">
-                {/* ターゲットモンスター（ドロップ報酬） */}
-                {targetMon ? (
-                  <div className="bg-slate-950 border-2 border-amber-500/70 p-2.5 rounded-2xl flex items-center gap-3 shadow-lg shadow-amber-950/30">
-                    <img src={targetMon.image_url} alt={targetMon.name} className="w-12 h-12 object-cover rounded-xl border border-amber-400" />
-                    <div>
-                      <div className="text-[9px] text-amber-400 font-bold">{"★".repeat(targetMon.rarity)}</div>
-                      <div className="text-xs font-black text-white">{targetMon.name}</div>
-                      <div className="text-[10px] text-cyan-400 font-mono">☘️ 100%完答でドロップ</div>
-                    </div>
+              {dropResult.isDropped ? (
+                <div className="space-y-3">
+                  <div className="text-3xl animate-pulse">🎁</div>
+                  <h3 className="text-lg font-black text-green-400">モンスターGET!</h3>
+                  <img src={dropResult.monster.image_url} alt={dropResult.monster.name} className="w-24 h-24 object-cover rounded-xl mx-auto border-2 border-green-500 shadow-md" />
+                  <div>
+                    <div className="text-sm font-bold">{dropResult.monster.name}</div>
+                    <div className="text-xs text-blue-400 font-mono mt-0.5">現在のラック: ☘️ {dropResult.newLuck}</div>
                   </div>
-                ) : (
-                  <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl text-xs text-slate-500 font-mono">
-                    モンスター未割り当て
-                  </div>
-                )}
-
-                {/* 経験値アイコン */}
-                <div className="w-14 h-14 bg-slate-950 border border-purple-500/50 rounded-2xl flex flex-col items-center justify-center text-center shadow">
-                  <span className="text-xs font-black text-purple-400 font-mono">EXP</span>
-                  <span className="text-[9px] text-slate-400 font-mono">x {stats.xpMult}倍</span>
                 </div>
-
-                {/* オーブアイコン */}
-                <div className="w-14 h-14 bg-slate-950 border border-cyan-500/50 rounded-2xl flex flex-col items-center justify-center text-center shadow">
-                  <span className="text-base">💎</span>
-                  <span className="text-[9px] text-cyan-300 font-mono">初回 +5</span>
+              ) : (
+                <div className="space-y-2 py-4">
+                  <div className="text-3xl">💦</div>
+                  <h3 className="text-base font-bold text-gray-300">ドロップ失敗...</h3>
+                  <p className="text-xs text-gray-400 font-mono">
+                    今回のドロップ確率: {dropResult.dropRateUsed}%
+                  </p>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {/* 出撃パーティデッキ枠 */}
-            <div className="bg-slate-950/80 border border-slate-800/80 p-4 rounded-2xl space-y-2">
-              <div className="flex justify-between items-center text-xs font-mono">
-                <span className="font-bold text-slate-400">⚔️ 出撃デッキメンバー</span>
-                <span className="text-[10px] text-green-400">ドロップ加算 +{stats.earDropBonus}pt</span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {[0, 1, 2].map((sIdx) => {
-                  const m = partySlots[sIdx];
-                  const luck = m && m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 0;
-
-                  return (
-                    <div key={sIdx} className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl text-center space-y-1">
-                      <div className="text-[9px] text-slate-500 font-mono">#{sIdx + 1} {sIdx === 0 && "👑"}</div>
-                      {m ? (
-                        <>
-                          <img src={m.image_url} alt={m.name} className="w-10 h-10 object-cover rounded-lg mx-auto border border-indigo-500/50" />
-                          <div className="text-[10px] font-bold text-slate-200 truncate">{m.name}</div>
-                          <div className="text-[9px] text-cyan-300 font-mono">☘️ {luck}</div>
-                        </>
-                      ) : (
-                        <div className="py-4 text-[10px] text-slate-600 font-bold">未設定</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <button
+                onClick={() => setDropResult(null)}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors"
+              >
+                閉じる
+              </button>
             </div>
           </div>
-
-          {/* 画面右下：アクション大型ボタン領域 (画像1再現) */}
-          <div className="relative z-10 flex items-center justify-end gap-3 pt-4 border-t border-slate-800/80">
-            {/* パーティ編成へ移動 */}
-            <Link
-              href={`/party?fromClip=${currentClipId}`}
-              className="py-3.5 px-6 bg-slate-800 hover:bg-slate-700 active:translate-y-0.5 border border-slate-700 text-slate-200 font-black text-xs rounded-xl shadow-lg transition-all"
-            >
-              パーティ編成へ
-            </Link>
-
-            {/* ⚔️ 出撃開始 (マッチング・出撃) */}
-            <button
-              onClick={() => router.push(`/clips/${currentClipId}`)}
-              className="py-3.5 px-8 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-sm rounded-xl shadow-2xl shadow-indigo-950 border border-indigo-400/30 transition-all uppercase tracking-widest flex items-center gap-2 animate-pulse"
-            >
-              <span>⚔️ 出 撃 開 始</span>
-            </button>
-          </div>
-
-        </div>
+        )}
 
       </div>
     </main>
