@@ -37,13 +37,19 @@ interface Monster {
   stat_voc: number;
 }
 
+interface PartyMonster {
+  slot: number;
+  monster: Monster;
+  used: boolean;
+}
+
 export default function ClipPage() {
   const params = useParams();
   const id = params?.id as string;
 
   const [clip, setClip] = useState<any>(null);
   const [targetMonster, setTargetMonster] = useState<Monster | null>(null);
-  const [leaderMonster, setLeaderMonster] = useState<Monster | null>(null);
+  const [partyMonsters, setPartyMonsters] = useState<PartyMonster[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,13 +59,12 @@ export default function ClipPage() {
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
   const [checkedSegments, setCheckedSegments] = useState<Record<string, boolean>>({});
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [skillMessage, setSkillMessage] = useState<string | null>(null);
 
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
 
-  // ヒント使用可能回数（VOCステータス連動）
   const [hintCharges, setHintCharges] = useState(0);
-  const [hintsUsedCount, setHintsUsedCount] = useState(0);
 
   // ドロップ結果モーダル用ステート
   const [dropResult, setDropResult] = useState<{
@@ -102,21 +107,28 @@ export default function ClipPage() {
           }
         }
 
-        // パーティのリーダー（SLOT #1）を取得
+        // パーティ3体を全取得
         if (user) {
-          const { data: partyLeader } = await supabase
+          const { data: pList } = await supabase
             .from('party')
-            .select('monsters(*)')
+            .select('slot, monsters(*)')
             .eq('owner_id', user.id)
-            .eq('slot', 1)
-            .maybeSingle();
+            .order('slot', { ascending: true });
 
-          if (partyLeader && partyLeader.monsters) {
-            const lMon = partyLeader.monsters as any;
-            setLeaderMonster(lMon);
-            // 語彙 (VOC) ステータスによるヒント回数算定 (最大5回)
-            const charges = Math.min(5, Math.floor((lMon.stat_voc || 0) / 400)) + 1;
-            setHintCharges(charges);
+          if (pList) {
+            const formatted: PartyMonster[] = pList.map((p) => ({
+              slot: p.slot,
+              monster: p.monsters as any,
+              used: false,
+            }));
+            setPartyMonsters(formatted);
+
+            // リーダー（スロット1）の語彙ステータスからヒント回数を計算
+            const leader = formatted.find((p) => p.slot === 1);
+            if (leader) {
+              const charges = Math.min(5, Math.floor((leader.monster.stat_voc || 0) / 400)) + 1;
+              setHintCharges(charges);
+            }
           }
         }
 
@@ -161,7 +173,6 @@ export default function ClipPage() {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
   };
 
-  // 💡 ヒントスキル発動（頭文字補完）
   const handleUseHint = (segId: string, wIdx: number, targetAnswer: string) => {
     if (hintCharges <= 0) return;
 
@@ -172,7 +183,58 @@ export default function ClipPage() {
     const firstChar = targetAnswer.charAt(0);
     setUserAnswers((prev) => ({ ...prev, [key]: firstChar }));
     setHintCharges((prev) => prev - 1);
-    setHintsUsedCount((prev) => prev + 1);
+  };
+
+  // ★ モンスターアイコンタップ時の固有アクティブスキル発動処理
+  const handleActivateMonsterSkill = (slotIdx: number) => {
+    const pm = partyMonsters.find((p) => p.slot === slotIdx);
+    if (!pm || pm.used) return;
+
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const newAnswers = { ...userAnswers };
+
+    let effectApplied = false;
+
+    // スキルコードに応じた固有効果発動
+    if (pm.monster.skill_code === 'VOCAB_HINT_1' || pm.monster.skill_code === 'COMBO_PROTECT_1') {
+      // 効果: 未入力の空欄1つを「完全自動で即座に正解入力」！
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        const key = `${currentSeg.id}-${wIdx}`;
+        const targetAns = item ? item.answer : words[wIdx].replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!newAnswers[key] || newAnswers[key].trim().toLowerCase() !== targetAns.toLowerCase()) {
+          newAnswers[key] = targetAns;
+          effectApplied = true;
+          setSkillMessage(`⚡ スキル発動【${pm.monster.name}】: 空欄1つを完全クリア！`);
+          break;
+        }
+      }
+    } else {
+      // 効果: 現在の文章のすべての未入力空欄に頭文字（1文字目）をセット！
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        const key = `${currentSeg.id}-${wIdx}`;
+        const targetAns = item ? item.answer : words[wIdx].replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!newAnswers[key] && targetAns.length > 0) {
+          newAnswers[key] = targetAns.charAt(0);
+          effectApplied = true;
+        }
+      }
+      setSkillMessage(`⚡ スキル発動【${pm.monster.name}】: 現在の文章の頭文字を解放！`);
+    }
+
+    if (effectApplied) {
+      setUserAnswers(newAnswers);
+      setPartyMonsters((prev) =>
+        prev.map((p) => (p.slot === slotIdx ? { ...p, used: true } : p))
+      );
+    }
   };
 
   const handlePrevSegment = () => {
@@ -181,6 +243,7 @@ export default function ClipPage() {
       setActiveSegIndex(newIdx);
       setSeekToTime(segments[newIdx].start_ms / 1000);
       setSaveMessage(null);
+      setSkillMessage(null);
     }
   };
 
@@ -190,6 +253,7 @@ export default function ClipPage() {
       setActiveSegIndex(newIdx);
       setSeekToTime(segments[newIdx].start_ms / 1000);
       setSaveMessage(null);
+      setSkillMessage(null);
     }
   };
 
@@ -352,31 +416,54 @@ export default function ClipPage() {
           </Link>
         </div>
 
-        {/* ドロップターゲット ＆ リーダースキル表示バー */}
-        <div className="space-y-2">
-          {targetMonster && (
-            <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md">
-              <div className="flex items-center gap-3">
-                <img src={targetMonster.image_url} alt={targetMonster.name} className="w-10 h-10 object-cover rounded-lg border border-gray-700" />
-                <div>
-                  <div className="text-[10px] text-amber-400 font-bold">ドロップ対象 {"★".repeat(targetMonster.rarity)}</div>
-                  <div className="text-xs font-black">{targetMonster.name}</div>
-                </div>
-              </div>
-              <div className="text-right text-[10px] text-gray-400 font-mono">
-                空欄0クリアで<br /><span className="text-cyan-400 font-bold">ドロップのチャンス!</span>
+        {/* ドロップターゲット情報 */}
+        {targetMonster && (
+          <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-3">
+              <img src={targetMonster.image_url} alt={targetMonster.name} className="w-10 h-10 object-cover rounded-lg border border-gray-700" />
+              <div>
+                <div className="text-[10px] text-amber-400 font-bold">ドロップ対象 {"★".repeat(targetMonster.rarity)}</div>
+                <div className="text-xs font-black">{targetMonster.name}</div>
               </div>
             </div>
-          )}
+            <div className="text-right text-[10px] text-gray-400 font-mono">
+              空欄0クリアで<br /><span className="text-cyan-400 font-bold">ドロップのチャンス!</span>
+            </div>
+          </div>
+        )}
 
-          {leaderMonster && (
-            <div className="bg-indigo-950 border border-indigo-800 text-indigo-200 p-2.5 rounded-xl flex items-center justify-between text-xs font-mono">
-              <div className="flex items-center gap-2">
-                <span>🛡️ リーダースキル: <strong>{leaderMonster.name}</strong></span>
-              </div>
-              <div className="flex items-center gap-1.5 font-bold text-cyan-300">
-                💡 ヒント残り: {hintCharges} 回
-              </div>
+        {/* ★ 新機能：パーティ3体 ＆ タップでスキル発動バー */}
+        <div className="bg-indigo-950 border border-indigo-800 text-white p-3 rounded-2xl space-y-2 shadow-lg">
+          <div className="flex justify-between items-center text-xs font-mono border-b border-indigo-900 pb-1.5">
+            <span className="font-bold text-indigo-300">⚔️ パーティモンスター (タップで固有スキル発動)</span>
+            <span className="text-[10px] text-cyan-300 font-bold">💡 ヒント可能: {hintCharges} 回</span>
+          </div>
+
+          {partyMonsters.length === 0 ? (
+            <div className="text-[11px] text-gray-400 text-center py-1 font-mono">
+              パーティが未設定です。<Link href="/party" className="text-cyan-400 underline font-bold">パーティ編成画面</Link> でモンスターを設定しましょう。
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {partyMonsters.map((p) => (
+                <button
+                  key={p.slot}
+                  disabled={p.used}
+                  onClick={() => handleActivateMonsterSkill(p.slot)}
+                  className={`p-2 rounded-xl border text-center transition-all flex flex-col items-center justify-between ${
+                    p.used
+                      ? "bg-gray-900 border-gray-800 opacity-40 grayscale cursor-not-allowed"
+                      : "bg-indigo-900/80 border-indigo-600 hover:border-cyan-400 hover:scale-105 active:scale-95 cursor-pointer shadow-md"
+                  }`}
+                >
+                  <div className="text-[9px] text-amber-400 font-mono">SLOT #{p.slot}</div>
+                  <img src={p.monster.image_url} alt={p.monster.name} className="w-10 h-10 object-cover rounded-lg my-1 border border-indigo-500/50" />
+                  <div className="text-[10px] font-bold truncate w-full">{p.monster.name}</div>
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded mt-1 ${p.used ? "bg-gray-800 text-gray-500" : "bg-cyan-500 text-black animate-pulse"}`}>
+                    {p.used ? "USED" : "SKILL READY"}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -414,6 +501,13 @@ export default function ClipPage() {
                 ▶️ この文を再生
               </button>
             </div>
+
+            {/* スキル発動通知メッセージ */}
+            {skillMessage && (
+              <div className="p-2.5 bg-cyan-50 border border-cyan-300 text-cyan-900 text-xs font-black rounded-xl text-center animate-bounce shadow-sm">
+                {skillMessage}
+              </div>
+            )}
 
             {/* 穴埋め入力エリア */}
             <div className="flex flex-wrap gap-2 items-center font-mono py-2 min-h-[60px]">
@@ -555,6 +649,7 @@ export default function ClipPage() {
                     setActiveSegIndex(idx);
                     setSeekToTime(seg.start_ms / 1000);
                     setSaveMessage(null);
+                    setSkillMessage(null);
                   }}
                   className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-colors flex justify-between items-center ${
                     isCurrent ? 'bg-blue-50 border-blue-500 font-bold text-blue-900' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'

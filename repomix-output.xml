@@ -67,6 +67,7 @@ src/
     layout.tsx
     page.tsx
   components/
+    ClipGachaModal.tsx
     ClipPlayer.tsx
     DrillView.tsx
     GachaModal.tsx
@@ -882,6 +883,98 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 }
 </file>
 
+<file path="src/components/ClipGachaModal.tsx">
+"use client";
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  image_url: string;
+  quote_ja: string;
+}
+
+interface Props {
+  isOpen: boolean;
+  monster: Monster | null;
+  onClose: () => void;
+}
+
+export default function ClipGachaModal({ isOpen, monster, onClose }: Props) {
+  if (!isOpen || !monster) return null;
+
+  const getRarityBg = (r: number) => {
+    switch (r) {
+      case 5: return "from-amber-500 via-purple-600 to-indigo-700 border-amber-300";
+      case 4: return "from-yellow-500 via-amber-600 to-orange-600 border-yellow-300";
+      case 3: return "from-blue-500 to-indigo-700 border-blue-300";
+      case 2: return "from-green-500 to-teal-700 border-green-300";
+      default: return "from-gray-500 to-gray-700 border-gray-300";
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center p-4 z-50 animate-fadeIn">
+      <div className="max-w-sm w-full text-center space-y-6 text-white relative">
+        
+        {/* 出現カットインタイトル */}
+        <div className="space-y-1">
+          <span className="bg-gradient-to-r from-amber-400 to-yellow-200 text-black font-black px-4 py-1 rounded-full text-xs uppercase tracking-widest shadow-lg animate-bounce inline-block">
+            ✨ クリップモンスター出現！
+          </span>
+          <h2 className="text-2xl font-black text-amber-300 drop-shadow-md">
+            {monster.name} が出現！
+          </h2>
+        </div>
+
+        {/* モンスターカード風演出 */}
+        <div className={`p-1.5 rounded-2xl bg-gradient-to-b ${getRarityBg(monster.rarity)} shadow-2xl transition-transform hover:scale-105`}>
+          <div className="bg-gray-950 rounded-xl p-5 space-y-4">
+            
+            <div className="text-center">
+              <span className="text-lg text-amber-400 tracking-widest font-black">
+                {"★".repeat(monster.rarity)}
+              </span>
+            </div>
+
+            <div className="relative">
+              <img
+                src={monster.image_url}
+                alt={monster.name}
+                className="w-40 h-48 object-cover rounded-xl mx-auto border-2 border-gray-800 shadow-xl"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-white">{monster.name}</h3>
+              <p className="text-xs text-gray-400 font-mono">{monster.name_en}</p>
+            </div>
+
+            <p className="text-xs italic text-cyan-300 bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
+              "{monster.quote_ja}"
+            </p>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-300 font-mono">
+          このクリップのディクテーション問題を解いて<br />
+          <span className="text-cyan-400 font-bold">ドロップ＆運極</span> を目指そう！
+        </p>
+
+        <button
+          onClick={onClose}
+          className="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white font-black text-sm rounded-xl shadow-xl transition-all"
+        >
+          学習スタート画面へ ➔
+        </button>
+
+      </div>
+    </div>
+  );
+}
+</file>
+
 <file path="src/components/DrillView.tsx">
 "use client";
 
@@ -1105,204 +1198,6 @@ export default function DrillView({ clipId, signedUrl }: Props) {
         >
           {submitting ? "採点・保存中..." : "回答をチェックする"}
         </button>
-      </div>
-    </div>
-  );
-}
-</file>
-
-<file path="src/components/GachaModal.tsx">
-"use client";
-
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-
-interface Monster {
-  id: number;
-  name: string;
-  name_en: string;
-  rarity: number;
-  element: string;
-  quote_en: string;
-  quote_ja: string;
-  madness_episode: string;
-  image_url: string;
-  stat_int: number;
-  stat_ear: number;
-  stat_voc: number;
-  stat_foc: number;
-  stat_luk: number;
-  stat_gut: number;
-}
-
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  orbCount: number;
-}
-
-export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [animating, setAnimating] = useState(false);
-  const [result, setResult] = useState<{ monster: Monster; isNew: boolean } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const supabase = createClient();
-
-  if (!isOpen) return null;
-
-  const handleSummon = async () => {
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setAnimating(true);
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("ログインしていません。");
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/gacha`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "ガチャ実行エラー");
-
-      // 1.5秒演出アニメーション待機
-      setTimeout(() => {
-        setResult(data);
-        setAnimating(false);
-        onSuccess();
-      }, 1500);
-    } catch (err: any) {
-      setError(err.message);
-      setAnimating(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getRarityColor = (r: number) => {
-    switch (r) {
-      case 5: return "from-amber-400 via-purple-500 to-indigo-600 border-amber-300 text-amber-300";
-      case 4: return "from-yellow-400 to-amber-600 border-yellow-400 text-yellow-300";
-      case 3: return "from-blue-400 to-indigo-600 border-blue-400 text-blue-300";
-      case 2: return "from-green-400 to-emerald-600 border-green-400 text-green-300";
-      default: return "from-gray-400 to-gray-600 border-gray-400 text-gray-300";
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 text-white space-y-6 shadow-2xl relative overflow-hidden">
-        
-        {/* ヘッダー */}
-        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-          <h2 className="text-lg font-black tracking-wide flex items-center gap-2">
-            <span>🔮 モンスター召喚</span>
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-sm font-bold">
-            ✕ 閉じる
-          </button>
-        </div>
-
-        {/* ガチャ演出領域 */}
-        {animating ? (
-          <div className="py-12 flex flex-col items-center justify-center space-y-4">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500 animate-spin flex items-center justify-center shadow-lg shadow-purple-500/50">
-              <div className="w-20 h-20 rounded-full bg-gray-900 flex items-center justify-center text-3xl">
-                💎
-              </div>
-            </div>
-            <p className="text-sm font-bold tracking-widest animate-pulse text-cyan-400">
-              モンスターを召喚中...
-            </p>
-          </div>
-        ) : result ? (
-          /* 結果表示 */
-          <div className="space-y-4 text-center">
-            <div className={`p-1 rounded-xl bg-gradient-to-b ${getRarityColor(result.monster.rarity)}`}>
-              <div className="bg-gray-950 rounded-lg p-4 space-y-3">
-                <div className="flex justify-between items-center text-xs font-bold font-mono">
-                  <span className="text-amber-400">
-                    {"★".repeat(result.monster.rarity)}
-                  </span>
-                  {result.isNew && (
-                    <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px]">
-                      NEW!
-                    </span>
-                  )}
-                </div>
-
-                <img
-                  src={result.monster.image_url}
-                  alt={result.monster.name}
-                  className="w-32 h-32 object-cover rounded-xl mx-auto border-2 border-gray-800 shadow-md"
-                />
-
-                <div>
-                  <h3 className="text-xl font-black text-white">{result.monster.name}</h3>
-                  <p className="text-xs text-gray-400 font-mono">{result.monster.name_en}</p>
-                </div>
-
-                <p className="text-xs italic text-cyan-300 font-serif">
-                  "{result.monster.quote_ja}"
-                </p>
-
-                {/* ステータス */}
-                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono bg-gray-900 p-2 rounded-lg text-gray-300">
-                  <div>INT: {result.monster.stat_int}</div>
-                  <div>EAR: {result.monster.stat_ear}</div>
-                  <div>VOC: {result.monster.stat_voc}</div>
-                  <div>FOC: {result.monster.stat_foc}</div>
-                  <div>LUK: {result.monster.stat_luk}</div>
-                  <div>GUT: {result.monster.stat_gut}</div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setResult(null)}
-              className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-xs font-bold transition-colors"
-            >
-              もう一度召喚画面に戻る
-            </button>
-          </div>
-        ) : (
-          /* 初期選択画面 */
-          <div className="space-y-6 text-center py-4">
-            <div className="space-y-2">
-              <div className="text-4xl">🔮</div>
-              <p className="text-xs text-gray-400">
-                オーブ5個を消費して召喚を行います。★4以上の強力なモンスターを獲得してステータスを強化しましょう。
-              </p>
-            </div>
-
-            {error && (
-              <p className="text-xs text-red-400 bg-red-950/50 p-2 rounded border border-red-800">
-                {error}
-              </p>
-            )}
-
-            <button
-              onClick={handleSummon}
-              disabled={loading || orbCount < 5}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-90 text-white rounded-xl font-black text-sm shadow-lg disabled:opacity-40 transition-all flex items-center justify-center gap-2"
-            >
-              <span>5 オーブで召喚する</span>
-              <span className="text-xs font-mono opacity-80">(所持: {orbCount}個)</span>
-            </button>
-          </div>
-        )}
-
       </div>
     </div>
   );
@@ -1699,435 +1594,192 @@ if __name__ == "__main__":
 }
 </file>
 
-<file path="src/app/history/page.tsx">
-'use client';
-
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
-
-interface Attempt {
-  id: string;
-  clip_id: string;
-  input_raw: string;
-  answer_gold: string;
-  created_at: string;
-  clips?: {
-    label: string;
-  };
-}
-
-export default function HistoryPage() {
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedIds, setSelectedSelectedIds] = useState<string[]>([]);
-  const [deleting, setDeleting] = useState(false);
-
-  const supabase = createClient();
-
-  const fetchAttempts = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('attempts')
-      .select('*, clips(label)')
-      .eq('is_correct', false)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching attempts:', error);
-    } else if (data) {
-      setAttempts(data);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void fetchAttempts();
-  }, []);
-
-  // 全選択 / 解除
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedSelectedIds(attempts.map((a) => a.id));
-    } else {
-      setSelectedSelectedIds([]);
-    }
-  };
-
-  // 単一選択 / 解除
-  const handleToggleSelect = (id: string) => {
-    setSelectedSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
-
-  // 1件削除
-  const handleDeleteSingle = async (id: string) => {
-    if (!confirm('この間違い記録を削除しますか？')) return;
-    setDeleting(true);
-    await supabase.from('attempts').delete().eq('id', id);
-    setSelectedSelectedIds((prev) => prev.filter((i) => i !== id));
-    await fetchAttempts();
-    setDeleting(false);
-  };
-
-  // 選択した項目を一括削除
-  const handleDeleteSelected = async () => {
-    if (selectedIds.length === 0) return;
-    if (!confirm(`選択した ${selectedIds.length} 件の間違い記録を削除しますか？`)) return;
-
-    setDeleting(true);
-    await supabase.from('attempts').delete().in('id', selectedIds);
-    setSelectedSelectedIds([]);
-    await fetchAttempts();
-    setDeleting(false);
-  };
-
-  const handlePrintPdf = () => {
-    window.print();
-  };
-
-  return (
-    <main className="min-h-screen bg-gray-50 py-8 print:bg-white print:py-0">
-      <div className="max-w-3xl mx-auto px-4 space-y-6">
-        
-        {/* ヘッダー領域 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3 print:hidden">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">📝 間違いノート・学習履歴</h1>
-            <p className="text-xs text-gray-500 mt-1">苦手な単語や文法のログを管理・削除できます</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handlePrintPdf}
-              className="px-3.5 py-2 bg-green-600 text-white font-bold text-xs rounded-lg hover:bg-green-700 shadow-sm transition-colors"
-            >
-              📄 PDFを印刷 / 出力
-            </button>
-            <Link
-              href="/"
-              className="px-3.5 py-2 bg-gray-200 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              ← ダッシュボード
-            </Link>
-          </div>
-        </div>
-
-        {/* 印刷/PDF専用ヘッダー */}
-        <div className="hidden print:block border-b pb-2 mb-4">
-          <h1 className="text-2xl font-bold text-black">Dictation App - 間違いデータ分析レポート</h1>
-          <p className="text-xs text-gray-500">出力日時: {new Date().toLocaleString()}</p>
-        </div>
-
-        {/* 一括操作バー */}
-        {!loading && attempts.length > 0 && (
-          <div className="flex items-center justify-between bg-white p-3 border rounded-xl shadow-sm print:hidden">
-            <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedIds.length === attempts.length && attempts.length > 0}
-                onChange={handleSelectAll}
-                className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
-              />
-              すべて選択 ({selectedIds.length} / {attempts.length} 件)
-            </label>
-
-            <button
-              onClick={handleDeleteSelected}
-              disabled={selectedIds.length === 0 || deleting}
-              className="px-3.5 py-1.5 bg-red-600 text-white font-bold text-xs rounded-lg hover:bg-red-700 disabled:opacity-40 transition-colors flex items-center gap-1"
-            >
-              🗑️ 選択した項目を削除
-            </button>
-          </div>
-        )}
-
-        {/* 一覧カード */}
-        {loading ? (
-          <p className="text-xs text-gray-500 text-center py-8">履歴を読み込み中...</p>
-        ) : attempts.length === 0 ? (
-          <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
-            間違えた問題の記録はありません！素晴らしいです。
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {attempts.map((att) => {
-              const isChecked = selectedIds.includes(att.id);
-              return (
-                <div
-                  key={att.id}
-                  className={`p-4 bg-white border rounded-xl shadow-sm space-y-2.5 transition-all print:border-gray-300 print:shadow-none ${
-                    isChecked ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50/20' : ''
-                  }`}
-                >
-                  <div className="flex items-center justify-between border-b pb-2 text-xs text-gray-400 font-mono">
-                    <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => handleToggleSelect(att.id)}
-                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer print:hidden"
-                      />
-                      <span>📅 {new Date(att.created_at).toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex items-center gap-3 print:hidden">
-                      <Link
-                        href={`/clips/${att.clip_id}`}
-                        className="text-blue-600 font-bold hover:underline"
-                      >
-                        {att.clips?.label || 'クリップを開く'} ➔
-                      </Link>
-                      <button
-                        onClick={() => handleDeleteSingle(att.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                        title="削除"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-sm font-mono pt-1">
-                    <div className="bg-red-50 p-2.5 rounded-lg border border-red-100">
-                      <span className="text-[10px] text-red-500 block font-bold mb-0.5">あなたの回答:</span>
-                      <span className="font-bold text-red-800 break-all">
-                        {att.input_raw || '（未入力）'}
-                      </span>
-                    </div>
-                    <div className="bg-green-50 p-2.5 rounded-lg border border-green-100">
-                      <span className="text-[10px] text-green-600 block font-bold mb-0.5">正解:</span>
-                      <span className="font-bold text-green-800 break-all">{att.answer_gold}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-      </div>
-    </main>
-  );
-}
-</file>
-
-<file path="src/components/TranscriptView.tsx">
+<file path="src/components/GachaModal.tsx">
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-interface Segment {
-  id: string;
-  idx: number;
-  start_ms: number;
-  end_ms: number;
-  text: string;
-  corrected_text?: string;
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  element: string;
+  quote_en: string;
+  quote_ja: string;
+  madness_episode: string;
+  image_url: string;
+  stat_int: number;
+  stat_ear: number;
+  stat_voc: number;
+  stat_foc: number;
+  stat_luk: number;
+  stat_gut: number;
 }
 
 interface Props {
-  videoId: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  orbCount: number;
 }
 
-export default function TranscriptView({ videoId }: Props) {
-  const [segments, setSegments] = useState<Segment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedStart, setSelectedStart] = useState<Segment | null>(null);
-  const [selectedEnd, setSelectedEnd] = useState<Segment | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
+export default function GachaModal({ isOpen, onClose, onSuccess, orbCount }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [animating, setAnimating] = useState(false);
+  const [result, setResult] = useState<{ monster: Monster; isNew: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const supabase = createClient();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSignedIn(!!data.session);
-    });
-  }, [supabase]);
+  if (!isOpen) return null;
 
-  useEffect(() => {
-    async function fetchSegments() {
-      if (!signedIn || !videoId) return;
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("segments")
-        .select("*")
-        .eq("video_id", videoId)
-        .order("idx", { ascending: true });
-
-      if (error) {
-        setMessage(`🚨 データ取得エラー: ${error.message}`);
-      } else if (data) {
-        setSegments(data);
-      }
-      setLoading(false);
-    }
-
-    void fetchSegments();
-  }, [videoId, signedIn, supabase]);
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setAuthError(error.message);
-    else setSignedIn(true);
-  };
-
-  const handleSelectSegment = (seg: Segment) => {
-    setMessage(null);
-    if (!selectedStart || (selectedStart && selectedEnd)) {
-      setSelectedStart(seg);
-      setSelectedEnd(null);
-    } else {
-      if (seg.idx < selectedStart.idx) {
-        setSelectedStart(seg);
-        setSelectedEnd(null);
-      } else {
-        setSelectedEnd(seg);
-      }
-    }
-  };
-
-  // 全文章のコピペ
-  const handleCopyAll = () => {
-    const fullText = segments.map((s) => s.corrected_text || s.text).join("\n");
-    void navigator.clipboard.writeText(fullText);
-    setMessage("📋 文字起こしの全文をクリップボードにコピーしました！");
-  };
-
-  // 選択範囲のコピペ
-  const handleCopySelected = () => {
-    if (!selectedStart) return;
-    const startIdx = selectedStart.idx;
-    const endIdx = selectedEnd ? selectedEnd.idx : selectedStart.idx;
-    const selectedSegs = segments.filter((s) => s.idx >= startIdx && s.idx <= endIdx);
-    const selectedText = selectedSegs.map((s) => s.corrected_text || s.text).join("\n");
-
-    void navigator.clipboard.writeText(selectedText);
-    setMessage("📋 選択範囲の文章をクリップボードにコピーしました！");
-  };
-
-  const handleCreateClip = async () => {
-    if (!selectedStart) return;
-
-    const startSeg = selectedStart;
-    const endSeg = selectedEnd || selectedStart;
-
-    setIsSubmitting(true);
-    setMessage(null);
+  const handleSummon = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setAnimating(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("ログインしていません。");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("ログインしていません。");
 
-      const { data: clip, error: clipErr } = await supabase
-        .from("clips")
-        .insert({
-          owner_id: user.id,
-          video_id: videoId,
-          start_ms: startSeg.start_ms,
-          end_ms: endSeg.end_ms,
-          seg_from: startSeg.idx,
-          seg_to: endSeg.idx,
-          label: `${(startSeg.start_ms / 1000).toFixed(1)}s - ${(endSeg.end_ms / 1000).toFixed(1)}s`,
-          status: "pending",
-        })
-        .select("id")
-        .single();
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/gacha`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
-      if (clipErr) throw clipErr;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "ガチャ実行エラー");
 
-      await supabase.from("ingest_jobs").insert({
-        owner_id: user.id,
-        video_id: videoId,
-        clip_id: clip.id,
-        type: "clip_encode",
-        lane: "gpu",
-        priority: 10,
-        payload: { video_id: videoId, clip_id: clip.id, start_ms: startSeg.start_ms, end_ms: endSeg.end_ms },
-      });
-
-      setMessage("🎉 クリップ切り出しジョブを送信しました！");
-      setSelectedStart(null);
-      setSelectedEnd(null);
+      setTimeout(() => {
+        setResult(data);
+        setAnimating(false);
+        onSuccess();
+      }, 1200);
     } catch (err: any) {
-      setMessage(`🚨 エラー: ${err.message}`);
+      setError(err.message);
+      setAnimating(false);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  if (signedIn === false) {
-    return (
-      <form onSubmit={handleSignIn} className="max-w-sm mx-auto p-6 space-y-4 bg-white border rounded-xl shadow-sm">
-        <h2 className="text-lg font-bold text-center">サインインが必要です</h2>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full border rounded-lg px-3 py-2 text-sm" required />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full border rounded-lg px-3 py-2 text-sm" required />
-        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">サインイン</button>
-        {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
-      </form>
-    );
-  }
-
-  if (loading || signedIn === null) {
-    return <div className="p-4 text-center text-gray-500">文字起こしを読み込み中...</div>;
-  }
-
-  const isSelected = (seg: Segment) => {
-    if (!selectedStart) return false;
-    if (!selectedEnd) return seg.idx === selectedStart.idx;
-    return seg.idx >= selectedStart.idx && seg.idx <= selectedEnd.idx;
+  const getRarityColor = (r: number) => {
+    switch (r) {
+      case 5: return "from-amber-400 via-purple-500 to-indigo-600 border-amber-300 text-amber-300";
+      case 4: return "from-yellow-400 to-amber-600 border-yellow-400 text-yellow-300";
+      case 3: return "from-blue-400 to-indigo-600 border-blue-400 text-blue-300";
+      case 2: return "from-green-400 to-emerald-600 border-green-400 text-green-300";
+      default: return "from-gray-400 to-gray-600 border-gray-400 text-gray-300";
+    }
   };
 
   return (
-    <div className="space-y-4 max-w-xl mx-auto p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold">Transcript (文字起こし)</h2>
-        <button onClick={handleCopyAll} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200">
-          📋 全文コピー
-        </button>
-      </div>
-
-      {selectedStart && (
-        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between gap-2">
-          <button onClick={handleCopySelected} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-100">
-            📋 選択文をコピー
-          </button>
-          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-md text-sm hover:bg-blue-700 disabled:opacity-50">
-            {isSubmitting ? "送信中..." : "この区間でクリップ作成"}
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 text-white space-y-6 shadow-2xl relative overflow-hidden">
+        
+        <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+          <h2 className="text-lg font-black tracking-wide flex items-center gap-2">
+            <span>🤝 ノーマル召喚 (フレンドガチャ枠)</span>
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-sm font-bold">
+            ✕ 閉じる
           </button>
         </div>
-      )}
 
-      {message && <div className="p-3 bg-gray-100 rounded-lg text-xs font-mono">{message}</div>}
-
-      <div className="space-y-2 border rounded-lg p-2 bg-white max-h-[60vh] overflow-y-auto">
-        {segments.map((seg) => {
-          const active = isSelected(seg);
-          return (
-            <div
-              key={seg.id}
-              onClick={() => handleSelectSegment(seg)}
-              className={`p-3 rounded-lg border cursor-pointer transition-colors text-sm ${
-                active ? "bg-blue-100 border-blue-500 font-medium" : "hover:bg-gray-50 border-gray-200"
-              }`}
-            >
-              <div className="flex justify-between text-[10px] text-gray-400 font-mono mb-1">
-                <span>#{(seg.idx + 1).toString().padStart(2, "0")}</span>
-                <span>{(seg.start_ms / 1000).toFixed(1)}s - {(seg.end_ms / 1000).toFixed(1)}s</span>
+        {animating ? (
+          <div className="py-12 flex flex-col items-center justify-center space-y-4">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 animate-spin flex items-center justify-center shadow-lg shadow-teal-500/50">
+              <div className="w-16 h-16 rounded-full bg-gray-900 flex items-center justify-center text-2xl">
+                💎
               </div>
-              <p className="text-gray-800 leading-relaxed">{seg.corrected_text || seg.text}</p>
             </div>
-          );
-        })}
+            <p className="text-sm font-bold tracking-widest animate-pulse text-emerald-400">
+              モンスターを召喚中...
+            </p>
+          </div>
+        ) : result ? (
+          <div className="space-y-4 text-center">
+            <div className={`p-1 rounded-xl bg-gradient-to-b ${getRarityColor(result.monster.rarity)}`}>
+              <div className="bg-gray-950 rounded-lg p-4 space-y-3">
+                <div className="flex justify-between items-center text-xs font-bold font-mono">
+                  <span className="text-amber-400">
+                    {"★".repeat(result.monster.rarity)}
+                  </span>
+                  {result.isNew && (
+                    <span className="bg-red-600 text-white px-2 py-0.5 rounded-full text-[10px]">
+                      NEW!
+                    </span>
+                  )}
+                </div>
+
+                <img
+                  src={result.monster.image_url}
+                  alt={result.monster.name}
+                  className="w-28 h-28 object-cover rounded-xl mx-auto border-2 border-gray-800 shadow-md"
+                />
+
+                <div>
+                  <h3 className="text-xl font-black text-white">{result.monster.name}</h3>
+                  <p className="text-xs text-gray-400 font-mono">{result.monster.name_en}</p>
+                </div>
+
+                <p className="text-xs italic text-cyan-300 font-serif">
+                  "{result.monster.quote_ja}"
+                </p>
+
+                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono bg-gray-900 p-2 rounded-lg text-gray-300">
+                  <div>INT: {result.monster.stat_int}</div>
+                  <div>EAR: {result.monster.stat_ear}</div>
+                  <div>VOC: {result.monster.stat_voc}</div>
+                  <div>FOC: {result.monster.stat_foc}</div>
+                  <div>LUK: {result.monster.stat_luk}</div>
+                  <div>GUT: {result.monster.stat_gut}</div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setResult(null)}
+              className="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-xs font-bold transition-colors"
+            >
+              もう一度召喚画面に戻る
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6 text-center py-4">
+            <div className="space-y-2">
+              <div className="text-4xl">🤝</div>
+              <p className="text-xs text-gray-400">
+                オーブ1個で気軽に召喚できます。（★1〜★3メインの育成・ラック上げ用枠です）
+              </p>
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-400 bg-red-950/50 p-2 rounded border border-red-800">
+                {error}
+              </p>
+            )}
+
+            <button
+              onClick={handleSummon}
+              disabled={loading || orbCount < 1}
+              className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 text-white rounded-xl font-black text-sm shadow-lg disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+            >
+              <span>1 オーブで召喚する</span>
+              <span className="text-xs font-mono opacity-80">(所持: {orbCount}個)</span>
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -2377,223 +2029,6 @@ Deno.serve(async (req) => {
 });
 </file>
 
-<file path="supabase/functions/gacha/index.ts">
-import { createClient } from "npm:@supabase/supabase-js@2.47.10";
-
-const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-function corsHeaders(origin: string | null): Record<string, string> {
-  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
-  const allow = isWildcard
-    ? (origin ?? "*")
-    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
-
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Headers": "authorization, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Max-Age": "86400",
-    "Vary": "Origin",
-  };
-}
-
-const getLuckMultiplier = (luck: number) => {
-  if (luck >= 99) return 1.30;
-  if (luck >= 90) return 1.22;
-  if (luck >= 60) return 1.15;
-  if (luck >= 30) return 1.08;
-  if (luck >= 10) return 1.03;
-  return 1.0;
-};
-
-Deno.serve(async (req) => {
-  const origin = req.headers.get("Origin");
-  const cors = corsHeaders(origin);
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: cors });
-  }
-  if (req.method !== "POST") {
-    return new Response("method not allowed", { status: 405, headers: cors });
-  }
-
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  // 1. オーブ残高の確認
-  const { data: balanceData } = await supabase
-    .from("orb_balance")
-    .select("balance")
-    .eq("owner_id", user.id)
-    .single();
-
-  const currentBalance = balanceData?.balance ?? 0;
-  if (currentBalance < 5) {
-    return new Response(JSON.stringify({ error: "オーブが不足しています（必要: 5個）" }), {
-      status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  // 2. パーティの LUK (幸運) ステータス加算計算 (仕様書 4 準拠)
-  const { data: partyList } = await supabase
-    .from("party")
-    .select("monster_id, monsters(*)")
-    .eq("owner_id", user.id);
-
-  let lukSum = 0;
-  if (partyList) {
-    for (const p of partyList) {
-      if (!p.monsters) continue;
-      const { data: uMon } = await supabase
-        .from("user_monsters")
-        .select("luck")
-        .eq("owner_id", user.id)
-        .eq("monster_id", p.monster_id)
-        .maybeSingle();
-
-      const luck = uMon?.luck ?? 1;
-      const mult = getLuckMultiplier(luck);
-      lukSum += Math.round((p.monsters as any).stat_luk * mult);
-    }
-  }
-
-  const lukGachaBonusPt = Math.min(3.0, lukSum * 0.0012);
-
-  // 3. 直近のピティ取得
-  const { data: lastGacha } = await supabase
-    .from("gacha_log")
-    .select("pity_counter_4, pity_counter_5")
-    .eq("owner_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  let pity4 = lastGacha?.pity_counter_4 ?? 0;
-  let pity5 = lastGacha?.pity_counter_5 ?? 0;
-
-  // 4. ガチャ確率計算 (仕様書 3.3 準拠)
-  let pityBonus = 0;
-  if (pity4 >= 5) {
-    pityBonus = (pity4 - 4) * 4.0;
-  }
-
-  let baseHighRarityProb = Math.min(26.0, 12.0 + pityBonus + lukGachaBonusPt);
-  if (pity4 >= 10) baseHighRarityProb = 100.0;
-
-  const delta = Math.max(0, baseHighRarityProb - 12.0);
-  let prob5 = 2.5 + delta * 0.2;
-  let prob4 = 9.5 + delta * 0.8;
-
-  if (pity5 >= 40) {
-    prob5 = 100.0;
-    prob4 = 0.0;
-  }
-
-  const rand = Math.random() * 100;
-  let selectedRarity = 1;
-
-  if (rand < prob5) {
-    selectedRarity = 5;
-  } else if (rand < prob5 + prob4) {
-    selectedRarity = 4;
-  } else if (rand < prob5 + prob4 + 20.0) {
-    selectedRarity = 3;
-  } else if (rand < prob5 + prob4 + 20.0 + 30.0) {
-    selectedRarity = 2;
-  } else {
-    selectedRarity = 1;
-  }
-
-  // 5. モンスター抽選
-  const { data: availableMonsters } = await supabase
-    .from("monsters")
-    .select("*")
-    .eq("rarity", selectedRarity);
-
-  if (!availableMonsters || availableMonsters.length === 0) {
-    return new Response(JSON.stringify({ error: "該当するレアリティのモンスターが存在しません" }), {
-      status: 500,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
-
-  const monster = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
-
-  // 6. オーブ消費
-  await supabase.from("orb_ledger").insert({
-    owner_id: user.id,
-    delta: -5,
-    reason: "gacha_summon",
-  });
-
-  // 7. 所持更新
-  const { data: existing } = await supabase
-    .from("user_monsters")
-    .select("luck, total_obtained")
-    .eq("owner_id", user.id)
-    .eq("monster_id", monster.id)
-    .maybeSingle();
-
-  let isNew = false;
-  if (existing) {
-    await supabase
-      .from("user_monsters")
-      .update({
-        luck: Math.min(99, existing.luck + 1),
-        total_obtained: existing.total_obtained + 1,
-      })
-      .eq("owner_id", user.id)
-      .eq("monster_id", monster.id);
-  } else {
-    isNew = true;
-    await supabase.from("user_monsters").insert({
-      owner_id: user.id,
-      monster_id: monster.id,
-      luck: 1,
-      total_obtained: 1,
-    });
-  }
-
-  // 8. ログ更新
-  const newPity4 = selectedRarity >= 4 ? 0 : pity4 + 1;
-  const newPity5 = selectedRarity === 5 ? 0 : pity5 + 1;
-
-  await supabase.from("gacha_log").insert({
-    owner_id: user.id,
-    monster_id: monster.id,
-    rarity: selectedRarity,
-    pity_counter_4: newPity4,
-    pity_counter_5: newPity5,
-  });
-
-  return new Response(
-    JSON.stringify({
-      monster,
-      isNew,
-      rarity: selectedRarity,
-      remainingOrbs: currentBalance - 5,
-    }),
-    { headers: { ...cors, "Content-Type": "application/json" } }
-  );
-});
-</file>
-
 <file path="supabase/functions/sign-clip/index.ts">
 import { AwsClient } from "npm:aws4fetch@1.0.20";
 import { createClient } from "npm:@supabase/supabase-js@2.47.10";
@@ -2769,6 +2204,410 @@ export default nextConfig;
 }
 </file>
 
+<file path="src/app/history/page.tsx">
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+
+interface Attempt {
+  id: string;
+  clip_id: string;
+  input_raw: string;
+  answer_gold: string;
+  created_at: string;
+  clips?: {
+    label: string;
+  };
+}
+
+interface SessionSummary {
+  totalSessions: number;
+  avgRawAccuracy: number;
+  totalDroppedCount: number;
+}
+
+export default function HistoryPage() {
+  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [summary, setSummary] = useState<SessionSummary>({
+    totalSessions: 0,
+    avgRawAccuracy: 0,
+    totalDroppedCount: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedSelectedIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
+
+  const supabase = createClient();
+
+  const fetchHistoryAndAnalytics = async () => {
+    setLoading(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 1. 間違い記録一覧の取得
+    const { data: attData, error } = await supabase
+      .from('attempts')
+      .select('*, clips(label)')
+      .eq('is_correct', false)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching attempts:', error);
+    } else if (attData) {
+      setAttempts(attData);
+    }
+
+    // 2. 学習セッション（play_sessions）の累積分析データ集計
+    if (user) {
+      const { data: sessData } = await supabase
+        .from('play_sessions')
+        .select('raw_accuracy, dropped_count')
+        .eq('owner_id', user.id);
+
+      if (sessData && sessData.length > 0) {
+        const total = sessData.length;
+        const avgAcc = sessData.reduce((acc, row) => acc + (row.raw_accuracy || 0), 0) / total;
+        const drops = sessData.reduce((acc, row) => acc + (row.dropped_count || 0), 0);
+
+        setSummary({
+          totalSessions: total,
+          avgRawAccuracy: Math.round(avgAcc),
+          totalDroppedCount: drops,
+        });
+      }
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    void fetchHistoryAndAnalytics();
+  }, []);
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedSelectedIds(attempts.map((a) => a.id));
+    } else {
+      setSelectedSelectedIds([]);
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSingle = async (id: string) => {
+    if (!confirm('この間違い記録を削除しますか？')) return;
+    setDeleting(true);
+    await supabase.from('attempts').delete().eq('id', id);
+    setSelectedSelectedIds((prev) => prev.filter((i) => i !== id));
+    await fetchHistoryAndAnalytics();
+    setDeleting(false);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`選択した ${selectedIds.length} 件の間違い記録を削除しますか？`)) return;
+
+    setDeleting(true);
+    await supabase.from('attempts').delete().in('id', selectedIds);
+    setSelectedSelectedIds([]);
+    await fetchHistoryAndAnalytics();
+    setDeleting(false);
+  };
+
+  const handlePrintPdf = () => {
+    window.print();
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-8 print:bg-white print:py-0">
+      <div className="max-w-3xl mx-auto px-4 space-y-6">
+        
+        {/* ヘッダー領域 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 gap-3 print:hidden">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">📝 間違いノート・学習レポート</h1>
+            <p className="text-xs text-gray-500 mt-1">累積のディクテーション分析データと誤答ログを管理できます</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handlePrintPdf}
+              className="px-3.5 py-2 bg-green-600 text-white font-bold text-xs rounded-lg hover:bg-green-700 shadow-sm transition-colors"
+            >
+              📄 分析PDFを印刷 / 出力
+            </button>
+            <Link
+              href="/"
+              className="px-3.5 py-2 bg-gray-200 text-gray-700 font-bold text-xs rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              ← ダッシュボード
+            </Link>
+          </div>
+        </div>
+
+        {/* 印刷/PDF専用ヘッダー */}
+        <div className="hidden print:block border-b pb-2 mb-4">
+          <h1 className="text-2xl font-bold text-black">Dictation App - 総合学習分析レポート</h1>
+          <p className="text-xs text-gray-500">出力日時: {new Date().toLocaleString()}</p>
+        </div>
+
+        {/* 分析サマリーパネル（印刷時も出力） */}
+        <div className="bg-white border rounded-2xl p-5 shadow-sm space-y-3">
+          <h2 className="text-xs font-extrabold text-gray-700 tracking-wider">📊 累積学習パフォーマンス</h2>
+          <div className="grid grid-cols-3 gap-3 font-mono text-center">
+            <div className="bg-gray-50 p-3 rounded-xl border">
+              <div className="text-[10px] text-gray-500 font-bold">総セッション数</div>
+              <div className="text-xl font-black text-gray-900 mt-0.5">{summary.totalSessions} 回</div>
+            </div>
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+              <div className="text-[10px] text-blue-600 font-bold">平均素の正答率 (raw)</div>
+              <div className="text-xl font-black text-blue-900 mt-0.5">{summary.avgRawAccuracy}%</div>
+            </div>
+            <div className="bg-purple-50 p-3 rounded-xl border border-purple-100">
+              <div className="text-[10px] text-purple-600 font-bold">獲得モンスター数</div>
+              <div className="text-xl font-black text-purple-900 mt-0.5">{summary.totalDroppedCount} 体</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 一括操作バー */}
+        {!loading && attempts.length > 0 && (
+          <div className="flex items-center justify-between bg-white p-3 border rounded-xl shadow-sm print:hidden">
+            <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedIds.length === attempts.length && attempts.length > 0}
+                onChange={handleSelectAll}
+                className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+              />
+              すべて選択 ({selectedIds.length} / {attempts.length} 件)
+            </label>
+
+            <button
+              onClick={handleDeleteSelected}
+              disabled={selectedIds.length === 0 || deleting}
+              className="px-3.5 py-1.5 bg-red-600 text-white font-bold text-xs rounded-lg hover:bg-red-700 disabled:opacity-40 transition-colors flex items-center gap-1"
+            >
+              🗑️ 選択した項目を削除
+            </button>
+          </div>
+        )}
+
+        {/* 一覧カード */}
+        {loading ? (
+          <p className="text-xs text-gray-500 text-center py-8">履歴を読み込み中...</p>
+        ) : attempts.length === 0 ? (
+          <div className="bg-white p-8 text-center border rounded-xl text-gray-400 text-sm">
+            間違えた問題の記録はありません！素晴らしいです。
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {attempts.map((att) => {
+              const isChecked = selectedIds.includes(att.id);
+              return (
+                <div
+                  key={att.id}
+                  className={`p-4 bg-white border rounded-xl shadow-sm space-y-2.5 transition-all print:border-gray-300 print:shadow-none ${
+                    isChecked ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50/20' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between border-b pb-2 text-xs text-gray-400 font-mono">
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleSelect(att.id)}
+                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer print:hidden"
+                      />
+                      <span>📅 {new Date(att.created_at).toLocaleString()}</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 print:hidden">
+                      <Link
+                        href={`/clips/${att.clip_id}`}
+                        className="text-blue-600 font-bold hover:underline"
+                      >
+                        {att.clips?.label || 'クリップを開く'} ➔
+                      </Link>
+                      <button
+                        onClick={() => handleDeleteSingle(att.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="削除"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm font-mono pt-1">
+                    <div className="bg-red-50 p-2.5 rounded-lg border border-red-100">
+                      <span className="text-[10px] text-red-500 block font-bold mb-0.5">あなたの回答:</span>
+                      <span className="font-bold text-red-800 break-all">
+                        {att.input_raw || '（未入力）'}
+                      </span>
+                    </div>
+                    <div className="bg-green-50 p-2.5 rounded-lg border border-green-100">
+                      <span className="text-[10px] text-green-600 block font-bold mb-0.5">正解:</span>
+                      <span className="font-bold text-green-800 break-all">{att.answer_gold}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+      </div>
+    </main>
+  );
+}
+</file>
+
+<file path="supabase/functions/gacha/index.ts">
+import { createClient } from "npm:@supabase/supabase-js@2.47.10";
+
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const isWildcard = ALLOWED_ORIGINS.includes("*") || ALLOWED_ORIGINS.length === 0;
+  const allow = isWildcard
+    ? (origin ?? "*")
+    : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : "");
+
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  };
+}
+
+Deno.serve(async (req) => {
+  const origin = req.headers.get("Origin");
+  const cors = corsHeaders(origin);
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: cors });
+  }
+  if (req.method !== "POST") {
+    return new Response("method not allowed", { status: 405, headers: cors });
+  }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !user) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 1. オーブ残高の確認（1個必要）
+  const { data: balanceData } = await supabase
+    .from("orb_balance")
+    .select("balance")
+    .eq("owner_id", user.id)
+    .single();
+
+  const currentBalance = balanceData?.balance ?? 0;
+  if (currentBalance < 1) {
+    return new Response(JSON.stringify({ error: "オーブが不足しています（必要: 1個）" }), {
+      status: 400,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  // 2. フレンドガチャ風確率判定（★1: 65%, ★2: 25%, ★3: 9.5%, ★4: 0.5%）
+  const rand = Math.random() * 100;
+  let selectedRarity = 1;
+
+  if (rand < 0.5) {
+    selectedRarity = 4;
+  } else if (rand < 0.5 + 9.5) {
+    selectedRarity = 3;
+  } else if (rand < 0.5 + 9.5 + 25.0) {
+    selectedRarity = 2;
+  } else {
+    selectedRarity = 1;
+  }
+
+  // 3. モンスター抽選
+  const { data: availableMonsters } = await supabase
+    .from("monsters")
+    .select("*")
+    .eq("rarity", selectedRarity);
+
+  if (!availableMonsters || availableMonsters.length === 0) {
+    return new Response(JSON.stringify({ error: "該当するレアリティのモンスターが存在しません" }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const monster = availableMonsters[Math.floor(Math.random() * availableMonsters.length)];
+
+  // 4. オーブ1個消費処理
+  await supabase.from("orb_ledger").insert({
+    owner_id: user.id,
+    delta: -1,
+    reason: "friend_gacha_summon",
+  });
+
+  // 5. user_monsters（所持/ラック）更新
+  const { data: existing } = await supabase
+    .from("user_monsters")
+    .select("luck, total_obtained")
+    .eq("owner_id", user.id)
+    .eq("monster_id", monster.id)
+    .maybeSingle();
+
+  let isNew = false;
+  if (existing) {
+    await supabase
+      .from("user_monsters")
+      .update({
+        luck: Math.min(99, existing.luck + 1),
+        total_obtained: existing.total_obtained + 1,
+      })
+      .eq("owner_id", user.id)
+      .eq("monster_id", monster.id);
+  } else {
+    isNew = true;
+    await supabase.from("user_monsters").insert({
+      owner_id: user.id,
+      monster_id: monster.id,
+      luck: 1,
+      total_obtained: 1,
+    });
+  }
+
+  return new Response(
+    JSON.stringify({
+      monster,
+      isNew,
+      rarity: selectedRarity,
+      remainingOrbs: currentBalance - 1,
+    }),
+    { headers: { ...cors, "Content-Type": "application/json" } }
+  );
+});
+</file>
+
 <file path="supabase/config.toml">
 [functions.sign-clip]
 enabled = true
@@ -2789,6 +2628,284 @@ import_map = "./functions/sign-clip/deno.json"
 entrypoint = "./functions/drop/index.ts"
 </file>
 
+<file path="src/components/TranscriptView.tsx">
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import ClipGachaModal from "@/components/ClipGachaModal";
+
+interface Segment {
+  id: string;
+  idx: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  corrected_text?: string;
+}
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  image_url: string;
+  quote_ja: string;
+}
+
+interface Props {
+  videoId: string;
+}
+
+export default function TranscriptView({ videoId }: Props) {
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedStart, setSelectedStart] = useState<Segment | null>(null);
+  const [selectedEnd, setSelectedEnd] = useState<Segment | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  // 出現モーダル用ステート
+  const [appearedMonster, setAppearedMonster] = useState<Monster | null>(null);
+  const [isClipGachaOpen, setIsClipGachaOpen] = useState(false);
+
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSignedIn(!!data.session);
+    });
+  }, [supabase]);
+
+  useEffect(() => {
+    async function fetchSegments() {
+      if (!signedIn || !videoId) return;
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("segments")
+        .select("*")
+        .eq("video_id", videoId)
+        .order("idx", { ascending: true });
+
+      if (error) {
+        setMessage(`🚨 データ取得エラー: ${error.message}`);
+      } else if (data) {
+        setSegments(data);
+      }
+      setLoading(false);
+    }
+
+    void fetchSegments();
+  }, [videoId, signedIn, supabase]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    else setSignedIn(true);
+  };
+
+  const handleSelectSegment = (seg: Segment) => {
+    setMessage(null);
+    if (!selectedStart || (selectedStart && selectedEnd)) {
+      setSelectedStart(seg);
+      setSelectedEnd(null);
+    } else {
+      if (seg.idx < selectedStart.idx) {
+        setSelectedStart(seg);
+        setSelectedEnd(null);
+      } else {
+        setSelectedEnd(seg);
+      }
+    }
+  };
+
+  const handleCopyAll = () => {
+    const fullText = segments.map((s) => s.corrected_text || s.text).join("\n");
+    void navigator.clipboard.writeText(fullText);
+    setMessage("📋 文字起こしの全文をクリップボードにコピーしました！");
+  };
+
+  const handleCopySelected = () => {
+    if (!selectedStart) return;
+    const startIdx = selectedStart.idx;
+    const endIdx = selectedEnd ? selectedEnd.idx : selectedStart.idx;
+    const selectedSegs = segments.filter((s) => s.idx >= startIdx && s.idx <= endIdx);
+    const selectedText = selectedSegs.map((s) => s.corrected_text || s.text).join("\n");
+
+    void navigator.clipboard.writeText(selectedText);
+    setMessage("📋 選択範囲の文章をクリップボードにコピーしました！");
+  };
+
+  // ★ オーブ5個消費 ＆ ガチャ演出付きクリップ作成
+  const handleCreateClip = async () => {
+    if (!selectedStart) return;
+
+    const startSeg = selectedStart;
+    const endSeg = selectedEnd || selectedStart;
+
+    setIsSubmitting(true);
+    setMessage(null);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("ログインしていません。");
+
+      // 1. オーブ残高の確認
+      const { data: bal } = await supabase
+        .from("orb_balance")
+        .select("balance")
+        .eq("owner_id", user.id)
+        .single();
+
+      if ((bal?.balance ?? 0) < 5) {
+        throw new Error("オーブが足りません（必要: 5個）。");
+      }
+
+      // 2. モンスターガチャ抽選（★1〜★5からランダム）
+      const { data: allMonsters } = await supabase.from("monsters").select("*");
+      let assignedMonster: Monster | null = null;
+      if (allMonsters && allMonsters.length > 0) {
+        assignedMonster = allMonsters[Math.floor(Math.random() * allMonsters.length)];
+      }
+
+      // 3. オーブ消費ログ
+      await supabase.from("orb_ledger").insert({
+        owner_id: user.id,
+        delta: -5,
+        reason: "clip_creation_gacha",
+      });
+
+      // 4. クリップの作成
+      const { data: clip, error: clipErr } = await supabase
+        .from("clips")
+        .insert({
+          owner_id: user.id,
+          video_id: videoId,
+          start_ms: startSeg.start_ms,
+          end_ms: endSeg.end_ms,
+          seg_from: startSeg.idx,
+          seg_to: endSeg.idx,
+          label: `${(startSeg.start_ms / 1000).toFixed(1)}s - ${(endSeg.end_ms / 1000).toFixed(1)}s`,
+          status: "pending",
+          monster_id: assignedMonster?.id || null,
+        })
+        .select("id")
+        .single();
+
+      if (clipErr) throw clipErr;
+
+      // 5. ジョブ送信
+      await supabase.from("ingest_jobs").insert({
+        owner_id: user.id,
+        video_id: videoId,
+        clip_id: clip.id,
+        type: "clip_encode",
+        lane: "gpu",
+        priority: 10,
+        payload: { video_id: videoId, clip_id: clip.id, start_ms: startSeg.start_ms, end_ms: endSeg.end_ms },
+      });
+
+      // ★ モンスター出現演出モーダルを起動！
+      if (assignedMonster) {
+        setAppearedMonster(assignedMonster);
+        setIsClipGachaOpen(true);
+      } else {
+        setMessage("🎉 クリップを作成しました！");
+      }
+
+      setSelectedStart(null);
+      setSelectedEnd(null);
+    } catch (err: any) {
+      setMessage(`🚨 エラー: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (signedIn === false) {
+    return (
+      <form onSubmit={handleSignIn} className="max-w-sm mx-auto p-6 space-y-4 bg-white border rounded-xl shadow-sm">
+        <h2 className="text-lg font-bold text-center">サインインが必要です</h2>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full border rounded-lg px-3 py-2 text-sm" required />
+        <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold text-sm hover:bg-blue-700">サインイン</button>
+        {authError && <p className="text-red-600 text-xs text-center">{authError}</p>}
+      </form>
+    );
+  }
+
+  if (loading || signedIn === null) {
+    return <div className="p-4 text-center text-gray-500">文字起こしを読み込み中...</div>;
+  }
+
+  const isSelected = (seg: Segment) => {
+    if (!selectedStart) return false;
+    if (!selectedEnd) return seg.idx === selectedStart.idx;
+    return seg.idx >= selectedStart.idx && seg.idx <= selectedEnd.idx;
+  };
+
+  return (
+    <div className="space-y-4 max-w-xl mx-auto p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold">Transcript (文字起こし)</h2>
+        <button onClick={handleCopyAll} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200">
+          📋 全文コピー
+        </button>
+      </div>
+
+      {selectedStart && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between gap-2">
+          <button onClick={handleCopySelected} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-100">
+            📋 選択文をコピー
+          </button>
+          <button onClick={handleCreateClip} disabled={isSubmitting} className="px-4 py-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white font-bold rounded-md text-sm hover:opacity-90 disabled:opacity-50 shadow-sm flex items-center gap-1">
+            <span>💎5</span> {isSubmitting ? "召喚・切り出し中..." : "この区間でクリップガチャ作成"}
+          </button>
+        </div>
+      )}
+
+      {message && <div className="p-3 bg-gray-100 rounded-lg text-xs font-mono">{message}</div>}
+
+      <div className="space-y-2 border rounded-lg p-2 bg-white max-h-[60vh] overflow-y-auto">
+        {segments.map((seg) => {
+          const active = isSelected(seg);
+          return (
+            <div
+              key={seg.id}
+              onClick={() => handleSelectSegment(seg)}
+              className={`p-3 rounded-lg border cursor-pointer transition-colors text-sm ${
+                active ? "bg-blue-100 border-blue-500 font-medium" : "hover:bg-gray-50 border-gray-200"
+              }`}
+            >
+              <div className="flex justify-between text-[10px] text-gray-400 font-mono mb-1">
+                <span>#{(seg.idx + 1).toString().padStart(2, "0")}</span>
+                <span>{(seg.start_ms / 1000).toFixed(1)}s - {(seg.end_ms / 1000).toFixed(1)}s</span>
+              </div>
+              <p className="text-gray-800 leading-relaxed">{seg.corrected_text || seg.text}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ★ クリップモンスター出現演出モーダル */}
+      <ClipGachaModal
+        isOpen={isClipGachaOpen}
+        monster={appearedMonster}
+        onClose={() => setIsClipGachaOpen(false)}
+      />
+
+    </div>
+  );
+}
+</file>
+
 <file path="src/app/page.tsx">
 "use client";
 
@@ -2805,6 +2922,13 @@ interface Video {
   created_at: string;
 }
 
+interface Monster {
+  id: number;
+  name: string;
+  rarity: number;
+  image_url: string;
+}
+
 interface Clip {
   id: string;
   label: string | null;
@@ -2815,6 +2939,9 @@ interface Clip {
   difficulty_score?: number | null;
   difficulty_tier?: string | null;
   effective_wpm?: number | null;
+  monster_id?: number | null;
+  monsters?: Monster | null;
+  user_luck?: number; // 現在のラック
   videos?: {
     youtube_id: string;
     title: string;
@@ -2858,11 +2985,15 @@ export default function DashboardPage() {
     if (!signedIn) return;
     setLoading(true);
 
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 1. オーブ残高
     const { data: orbRes, error: orbErr } = await supabase.rpc("ensure_initial_orbs");
     if (!orbErr && orbRes !== null) {
       setOrbCount(orbRes);
     }
 
+    // 2. 動画一覧
     const { data: vData } = await supabase
       .from("videos")
       .select("id, youtube_id, title, status, created_at")
@@ -2870,13 +3001,36 @@ export default function DashboardPage() {
 
     if (vData) setVideos(vData);
 
+    // 3. ユーザーのMonster所持ラック情報取得
+    let luckMap: Record<number, number> = {};
+    if (user) {
+      const { data: uMonData } = await supabase
+        .from("user_monsters")
+        .select("monster_id, luck")
+        .eq("owner_id", user.id);
+
+      if (uMonData) {
+        uMonData.forEach((row) => {
+          luckMap[row.monster_id] = row.luck;
+        });
+      }
+    }
+
+    // 4. クリップ一覧（モンスター情報結合）
     const { data: cData } = await supabase
       .from("clips")
-      .select("*, videos(youtube_id, title)")
+      .select("*, videos(youtube_id, title), monsters(*)")
       .order("created_at", { ascending: false });
 
-    if (cData) setClips(cData);
+    if (cData) {
+      const formattedClips: Clip[] = cData.map((c: any) => ({
+        ...c,
+        user_luck: c.monster_id ? (luckMap[c.monster_id] ?? 0) : 0,
+      }));
+      setClips(formattedClips);
+    }
 
+    // 5. ストレージ使用量
     const { data: assetData } = await supabase
       .from("clip_assets")
       .select("video_bytes");
@@ -3005,7 +3159,8 @@ export default function DashboardPage() {
     const labelMatch = (c.label || "").toLowerCase().includes(q);
     const tagMatch = (c.tags || []).some((t) => t.toLowerCase().includes(q));
     const tierMatch = (c.difficulty_tier || "").toLowerCase().includes(q);
-    return labelMatch || tagMatch || tierMatch;
+    const monsterMatch = (c.monsters?.name || "").toLowerCase().includes(q);
+    return labelMatch || tagMatch || tierMatch || monsterMatch;
   });
 
   const filteredVideos = videos.filter((v) =>
@@ -3024,7 +3179,6 @@ export default function DashboardPage() {
               <Link href="/history" className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded hover:bg-purple-100 transition-colors">
                 📝 間違いノート ➔
               </Link>
-              {/* パーティ・ガチャ・図鑑ボタン */}
               <Link
                 href="/party"
                 className="px-2.5 py-1 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-1"
@@ -3035,7 +3189,7 @@ export default function DashboardPage() {
                 onClick={() => setIsGachaOpen(true)}
                 className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded hover:opacity-90 transition-opacity shadow-sm flex items-center gap-1"
               >
-                🔮 召喚 (ガチャ)
+                🔮 召喚 (単体ガチャ)
               </button>
               <Link
                 href="/monsters"
@@ -3087,7 +3241,7 @@ export default function DashboardPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="🔍 題名、タグ、難易度（初級、上級など）で検索..."
+            placeholder="🔍 題名、タグ、難易度、モンスター名で検索..."
             className="w-full border bg-white rounded-xl px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:border-blue-500"
           />
 
@@ -3125,22 +3279,29 @@ export default function DashboardPage() {
                 {filteredClips.map((clip) => {
                   const ytId = clip.videos?.youtube_id;
                   const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
+                  const mon = clip.monsters;
+                  const currentLuck = clip.user_luck ?? 0;
+                  const remainingLuck = Math.max(0, 99 - currentLuck);
+                  const isLuckMax = currentLuck >= 99;
 
                   return (
                     <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
-                      {thumbUrl && (
-                        <div className="aspect-video bg-black relative">
+                      {/* サムネイル ＆ 難易度バッジ */}
+                      <div className="aspect-video bg-black relative">
+                        {thumbUrl ? (
                           <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
-                          {clip.difficulty_tier && (
-                            <span className={`absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-sm ${getTierBadgeStyle(clip.difficulty_tier)}`}>
-                              {clip.difficulty_tier} (Score: {clip.difficulty_score ?? 0})
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        ) : (
+                          <div className="w-full h-full bg-gray-800" />
+                        )}
+                        {clip.difficulty_tier && (
+                          <span className={`absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shadow-sm ${getTierBadgeStyle(clip.difficulty_tier)}`}>
+                            {clip.difficulty_tier} ({clip.difficulty_score ?? 0})
+                          </span>
+                        )}
+                      </div>
 
                       <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                           <div className="flex justify-between items-start">
                             <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600 line-clamp-1">
                               {clip.label || "無題のクリップ"}
@@ -3165,9 +3326,30 @@ export default function DashboardPage() {
                             </div>
                           </div>
 
-                          {clip.effective_wpm && (
-                            <div className="text-[10px] text-gray-500 font-mono">
-                              実効WPM: {clip.effective_wpm}
+                          {/* ★ モンスター ＆ ラック（運極）表示 */}
+                          {mon ? (
+                            <div className="bg-gray-900 text-white p-2.5 rounded-xl flex items-center justify-between shadow-inner">
+                              <div className="flex items-center gap-2.5">
+                                <img src={mon.image_url} alt={mon.name} className="w-9 h-9 object-cover rounded-lg border border-gray-700" />
+                                <div>
+                                  <div className="text-[9px] text-amber-400 font-bold">{"★".repeat(mon.rarity)}</div>
+                                  <div className="text-xs font-black truncate max-w-[110px]">{mon.name}</div>
+                                </div>
+                              </div>
+                              <div className="text-right font-mono">
+                                <div className="text-xs font-bold text-cyan-300">☘️ ラック {currentLuck}</div>
+                                <div className="text-[9px] text-gray-400">
+                                  {isLuckMax ? (
+                                    <span className="text-amber-400 font-bold animate-pulse">👑 運極達成!</span>
+                                  ) : (
+                                    <span>運極まで あと {remainingLuck} 体</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-gray-400 bg-gray-50 p-2 rounded-lg text-center font-mono">
+                              モンスター未割り当て
                             </div>
                           )}
 
@@ -3190,7 +3372,7 @@ export default function DashboardPage() {
                           href={`/clips/${clip.id}`}
                           className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
                         >
-                          学習をスタート ➔
+                          学習して運極を目指す ➔
                         </Link>
                       </div>
                     </div>
@@ -3274,7 +3456,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ガチャモーダル表示 */}
         <GachaModal
           isOpen={isGachaOpen}
           onClose={() => setIsGachaOpen(false)}
@@ -3324,6 +3505,8 @@ interface Monster {
   name_en: string;
   rarity: number;
   image_url: string;
+  skill_code: string;
+  stat_voc: number;
 }
 
 export default function ClipPage() {
@@ -3331,7 +3514,8 @@ export default function ClipPage() {
   const id = params?.id as string;
 
   const [clip, setClip] = useState<any>(null);
-  const [monster, setMonster] = useState<Monster | null>(null);
+  const [targetMonster, setTargetMonster] = useState<Monster | null>(null);
+  const [leaderMonster, setLeaderMonster] = useState<Monster | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3344,6 +3528,10 @@ export default function ClipPage() {
 
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [currentVideoTime, setCurrentVideoTime] = useState(0);
+
+  // ヒント使用可能回数（VOCステータス連動）
+  const [hintCharges, setHintCharges] = useState(0);
+  const [hintsUsedCount, setHintsUsedCount] = useState(0);
 
   // ドロップ結果モーダル用ステート
   const [dropResult, setDropResult] = useState<{
@@ -3364,6 +3552,8 @@ export default function ClipPage() {
     async function fetchData() {
       setLoading(true);
 
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { data: clipData } = await supabase
         .from('clips')
         .select('*, videos(youtube_id, title), monsters(*)')
@@ -3373,15 +3563,32 @@ export default function ClipPage() {
       if (clipData) {
         setClip(clipData);
 
-        // ★ モンスターが割り当てられていれば表示。未割り当てならここで自動選出＆保存
         if (clipData.monsters) {
-          setMonster(clipData.monsters);
+          setTargetMonster(clipData.monsters);
         } else {
           const { data: allMonsters } = await supabase.from('monsters').select('*');
           if (allMonsters && allMonsters.length > 0) {
             const randomMonster = allMonsters[Math.floor(Math.random() * allMonsters.length)];
             await supabase.from('clips').update({ monster_id: randomMonster.id }).eq('id', id);
-            setMonster(randomMonster);
+            setTargetMonster(randomMonster);
+          }
+        }
+
+        // パーティのリーダー（SLOT #1）を取得
+        if (user) {
+          const { data: partyLeader } = await supabase
+            .from('party')
+            .select('monsters(*)')
+            .eq('owner_id', user.id)
+            .eq('slot', 1)
+            .maybeSingle();
+
+          if (partyLeader && partyLeader.monsters) {
+            const lMon = partyLeader.monsters as any;
+            setLeaderMonster(lMon);
+            // 語彙 (VOC) ステータスによるヒント回数算定 (最大5回)
+            const charges = Math.min(5, Math.floor((lMon.stat_voc || 0) / 400)) + 1;
+            setHintCharges(charges);
           }
         }
 
@@ -3424,6 +3631,20 @@ export default function ClipPage() {
 
   const handleInputChange = (key: string, value: string) => {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // 💡 ヒントスキル発動（頭文字補完）
+  const handleUseHint = (segId: string, wIdx: number, targetAnswer: string) => {
+    if (hintCharges <= 0) return;
+
+    const key = `${segId}-${wIdx}`;
+    const currentVal = userAnswers[key] || '';
+    if (currentVal.toLowerCase() === targetAnswer.toLowerCase()) return;
+
+    const firstChar = targetAnswer.charAt(0);
+    setUserAnswers((prev) => ({ ...prev, [key]: firstChar }));
+    setHintCharges((prev) => prev - 1);
+    setHintsUsedCount((prev) => prev + 1);
   };
 
   const handlePrevSegment = () => {
@@ -3520,7 +3741,6 @@ export default function ClipPage() {
     }
   };
 
-  // 全体チェック ＆ ドロップ判定リクエスト
   const handleCheckAllAnswers = async () => {
     setIsSubmittingSession(true);
 
@@ -3604,21 +3824,34 @@ export default function ClipPage() {
           </Link>
         </div>
 
-        {/* ドロップターゲット情報表示 */}
-        {monster && (
-          <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md">
-            <div className="flex items-center gap-3">
-              <img src={monster.image_url} alt={monster.name} className="w-10 h-10 object-cover rounded-lg border border-gray-700" />
-              <div>
-                <div className="text-[10px] text-amber-400 font-bold">ドロップ対象 {"★".repeat(monster.rarity)}</div>
-                <div className="text-xs font-black">{monster.name}</div>
+        {/* ドロップターゲット ＆ リーダースキル表示バー */}
+        <div className="space-y-2">
+          {targetMonster && (
+            <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-md">
+              <div className="flex items-center gap-3">
+                <img src={targetMonster.image_url} alt={targetMonster.name} className="w-10 h-10 object-cover rounded-lg border border-gray-700" />
+                <div>
+                  <div className="text-[10px] text-amber-400 font-bold">ドロップ対象 {"★".repeat(targetMonster.rarity)}</div>
+                  <div className="text-xs font-black">{targetMonster.name}</div>
+                </div>
+              </div>
+              <div className="text-right text-[10px] text-gray-400 font-mono">
+                空欄0クリアで<br /><span className="text-cyan-400 font-bold">ドロップのチャンス!</span>
               </div>
             </div>
-            <div className="text-right text-[10px] text-gray-400 font-mono">
-              空欄0クリアで<br /><span className="text-cyan-400 font-bold">ドロップのチャンス!</span>
+          )}
+
+          {leaderMonster && (
+            <div className="bg-indigo-950 border border-indigo-800 text-indigo-200 p-2.5 rounded-xl flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <span>🛡️ リーダースキル: <strong>{leaderMonster.name}</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+                💡 ヒント残り: {hintCharges} 回
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* 1. プレイヤー領域 */}
         {signedUrl ? (
@@ -3663,19 +3896,31 @@ export default function ClipPage() {
                 const res = results[key];
 
                 const isTarget = segItems.length > 0 ? !!item : true;
+                const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
 
                 if (isTarget) {
                   return (
                     <div key={wIdx} className="inline-flex flex-col items-center">
-                      <input
-                        type="text"
-                        value={userAnswers[key] || ''}
-                        onChange={(e) => handleInputChange(key, e.target.value)}
-                        placeholder="---"
-                        className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
-                          res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
-                        }`}
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={userAnswers[key] || ''}
+                          onChange={(e) => handleInputChange(key, e.target.value)}
+                          placeholder="---"
+                          className={`w-24 border-b-2 px-1 py-1 text-center text-sm font-bold font-mono focus:outline-none transition-colors ${
+                            res ? (res.isCorrect ? 'border-green-500 bg-green-50 text-green-800' : 'border-red-500 bg-red-50 text-red-800') : 'border-blue-500 bg-white text-gray-900'
+                          }`}
+                        />
+                        {hintCharges > 0 && !res && (
+                          <button
+                            onClick={() => handleUseHint(currentSeg.id, wIdx, targetAnswer)}
+                            className="absolute -top-2 -right-2 bg-amber-400 hover:bg-amber-500 text-black text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow"
+                            title="頭文字ヒントを使う"
+                          >
+                            💡
+                          </button>
+                        )}
+                      </div>
                       {res && (
                         <span className={`text-[10px] font-bold mt-0.5 ${res.isCorrect ? 'text-green-600' : 'text-red-600'}`}>
                           {res.isCorrect ? '○ 100%' : `× (${res.answer})`}
@@ -3700,7 +3945,7 @@ export default function ClipPage() {
               </div>
             )}
 
-            {/* コントロール（前後ボタン & 回答チェック & 保存） */}
+            {/* コントロール */}
             <div className="flex items-center justify-between gap-2 pt-3 border-t">
               <button
                 disabled={activeSegIndex === 0}

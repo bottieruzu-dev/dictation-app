@@ -17,6 +17,7 @@ interface Monster {
   stat_foc: number;
   stat_luk: number;
   stat_gut: number;
+  skill_code: string;
   user_monsters?: {
     luck: number;
   }[];
@@ -25,19 +26,21 @@ interface Monster {
 export default function PartyPage() {
   const [ownedMonsters, setOwnedMonsters] = useState<Monster[]>([]);
   const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
+  const [draggedMonster, setDraggedMonster] = useState<Monster | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const supabase = createClient();
 
-  // ラックによるステータス倍率の計算 (仕様書 4 準拠)
   const getLuckMultiplier = (luck: number) => {
-    if (luck >= 99) return 1.30; // +30%
-    if (luck >= 90) return 1.22; // +22%
-    if (luck >= 60) return 1.15; // +15%
-    if (luck >= 30) return 1.08; // +8%
-    if (luck >= 10) return 1.03; // +3%
+    if (luck >= 99) return 1.30;
+    if (luck >= 90) return 1.22;
+    if (luck >= 60) return 1.15;
+    if (luck >= 30) return 1.08;
+    if (luck >= 10) return 1.03;
     return 1.0;
   };
 
@@ -51,7 +54,6 @@ export default function PartyPage() {
         return;
       }
 
-      // 所持モンスター一覧の取得
       const { data: mData } = await supabase
         .from("user_monsters")
         .select("monsters(*), luck")
@@ -64,7 +66,6 @@ export default function PartyPage() {
         }));
         setOwnedMonsters(list);
 
-        // 現在の編成（party）を取得
         const { data: pData } = await supabase
           .from("party")
           .select("slot, monster_id")
@@ -89,12 +90,10 @@ export default function PartyPage() {
     void fetchPartyData();
   }, [supabase]);
 
-  // モンスターをスロットにセット
   const handleSelectMonster = (monster: Monster, targetSlotIndex: number) => {
     setMessage(null);
     const newSlots = [...partySlots];
 
-    // すでに別のスロットにいる場合は重複を解除
     const existingIndex = newSlots.findIndex((s) => s?.id === monster.id);
     if (existingIndex !== -1) {
       newSlots[existingIndex] = null;
@@ -104,7 +103,6 @@ export default function PartyPage() {
     setPartySlots(newSlots);
   };
 
-  // スロットを空にする
   const handleClearSlot = (slotIndex: number) => {
     setMessage(null);
     const newSlots = [...partySlots];
@@ -112,7 +110,15 @@ export default function PartyPage() {
     setPartySlots(newSlots);
   };
 
-  // パーティ編成の保存
+  // ドラッグ＆ドロップ用ハンドラ
+  const handleDrop = (slotIdx: number) => {
+    if (draggedMonster) {
+      handleSelectMonster(draggedMonster, slotIdx);
+      setDraggedMonster(null);
+      setDragOverSlot(null);
+    }
+  };
+
   const handleSaveParty = async () => {
     setSaving(true);
     setMessage(null);
@@ -125,7 +131,6 @@ export default function PartyPage() {
     }
 
     try {
-      // 既存編成を削除して更新
       await supabase.from("party").delete().eq("owner_id", user.id);
 
       const inserts = partySlots
@@ -151,7 +156,6 @@ export default function PartyPage() {
     }
   };
 
-  // パーティ合計ステータスの計算
   const calculateTotalStats = () => {
     let intSum = 0, earSum = 0, vocSum = 0, focSum = 0, lukSum = 0, gutSum = 0;
 
@@ -175,7 +179,6 @@ export default function PartyPage() {
       foc: focSum,
       luk: lukSum,
       gut: gutSum,
-      // 各ゲーム内効果 (仕様書 4 準拠)
       xpMult: Math.min(2.5, 1.0 + intSum * 0.0008).toFixed(2),
       earDropBonus: Math.min(20.0, earSum * 0.006).toFixed(1),
       vocHints: Math.min(5, Math.floor(vocSum / 400)),
@@ -191,12 +194,11 @@ export default function PartyPage() {
     <main className="min-h-screen bg-gray-950 text-white py-8">
       <div className="max-w-4xl mx-auto px-4 space-y-6">
         
-        {/* ヘッダー */}
         <div className="flex items-center justify-between border-b border-gray-800 pb-4">
           <div>
             <h1 className="text-2xl font-black">⚔️ パーティ編成</h1>
             <p className="text-xs text-gray-400 mt-1">
-              所持モンスターを3体編成し、ステータス効果を発動させます
+              下のモンスターをドロップ領域へドラッグ＆ドロップして編成できます
             </p>
           </div>
           <Link
@@ -207,19 +209,28 @@ export default function PartyPage() {
           </Link>
         </div>
 
-        {/* 1. スロット編成領域 */}
+        {/* 1. スロット編成（ドロップターゲット領域） */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[0, 1, 2].map((slotIdx) => {
             const m = partySlots[slotIdx];
             const luck = m && m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 0;
+            const isOver = dragOverSlot === slotIdx;
 
             return (
               <div
                 key={slotIdx}
-                className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col justify-between space-y-3 relative shadow-lg"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverSlot(slotIdx);
+                }}
+                onDragLeave={() => setDragOverSlot(null)}
+                onDrop={() => handleDrop(slotIdx)}
+                className={`bg-gray-900 border rounded-2xl p-4 flex flex-col justify-between space-y-3 relative shadow-lg transition-all ${
+                  isOver ? "border-cyan-400 ring-4 ring-cyan-500/30 scale-[1.02]" : "border-gray-800"
+                }`}
               >
                 <div className="flex justify-between items-center text-xs font-bold font-mono text-gray-400">
-                  <span>SLOT #{slotIdx + 1}</span>
+                  <span>SLOT #{slotIdx + 1} {slotIdx === 0 && "👑(リーダー)"}</span>
                   {m && (
                     <button
                       onClick={() => handleClearSlot(slotIdx)}
@@ -235,7 +246,7 @@ export default function PartyPage() {
                     <img
                       src={m.image_url}
                       alt={m.name}
-                      className="w-24 h-24 object-cover rounded-xl mx-auto border-2 border-indigo-500 shadow-md"
+                      className="w-24 h-24 object-cover rounded-xl mx-auto border-2 border-indigo-500 shadow-md pointer-events-none"
                     />
                     <div>
                       <div className="text-xs text-amber-400 font-bold">{"★".repeat(m.rarity)}</div>
@@ -244,9 +255,9 @@ export default function PartyPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="py-10 text-center text-gray-600 border-2 border-dashed border-gray-800 rounded-xl space-y-1">
-                    <div className="text-2xl">➕</div>
-                    <div className="text-xs font-bold">未設定</div>
+                  <div className="py-10 text-center text-gray-500 border-2 border-dashed border-gray-800 rounded-xl space-y-1">
+                    <div className="text-2xl">🎯</div>
+                    <div className="text-xs font-bold">ここにドラッグ＆ドロップ</div>
                   </div>
                 )}
               </div>
@@ -254,7 +265,7 @@ export default function PartyPage() {
           })}
         </div>
 
-        {/* 保存ボタン・メッセージ */}
+        {/* 保存ボタン */}
         <div className="flex flex-col items-center gap-2">
           {message && (
             <div className="p-2.5 bg-indigo-950 border border-indigo-800 text-indigo-300 text-xs font-bold rounded-lg text-center w-full max-w-md">
@@ -271,7 +282,7 @@ export default function PartyPage() {
           </button>
         </div>
 
-        {/* 2. 合計ステータス & 特殊効果サマリー */}
+        {/* 2. 合計ステータス表示 */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-sm font-bold text-gray-300 border-b border-gray-800 pb-2">
             📊 パーティ合計ステータス & 発動効果
@@ -316,10 +327,10 @@ export default function PartyPage() {
           </div>
         </div>
 
-        {/* 3. 所持モンスター選択一覧 */}
+        {/* 3. 所持モンスター（ドラッグ可能リスト） */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
           <h2 className="text-sm font-bold text-gray-300">
-            所持モンスター一覧 ({ownedMonsters.length}体)
+            所持モンスター一覧 (ドラッグしてスロットへ配置)
           </h2>
 
           {loading ? (
@@ -337,8 +348,11 @@ export default function PartyPage() {
                 return (
                   <div
                     key={m.id}
-                    className={`bg-gray-950 border rounded-xl p-3 space-y-2 relative transition-all ${
-                      setSlotIdx !== -1 ? "border-indigo-500 ring-2 ring-indigo-500/30" : "border-gray-800 hover:border-gray-700"
+                    draggable
+                    onDragStart={() => setDraggedMonster(m)}
+                    onDragEnd={() => setDraggedMonster(null)}
+                    className={`bg-gray-950 border rounded-xl p-3 space-y-2 relative transition-all cursor-grab active:cursor-grabbing select-none ${
+                      setSlotIdx !== -1 ? "border-indigo-500 ring-2 ring-indigo-500/30 opacity-70" : "border-gray-800 hover:border-cyan-500 hover:scale-105"
                     }`}
                   >
                     {setSlotIdx !== -1 && (
@@ -347,7 +361,7 @@ export default function PartyPage() {
                       </span>
                     )}
 
-                    <img src={m.image_url} alt={m.name} className="w-16 h-16 object-cover rounded-lg mx-auto border border-gray-800" />
+                    <img src={m.image_url} alt={m.name} className="w-16 h-16 object-cover rounded-lg mx-auto border border-gray-800 pointer-events-none" />
 
                     <div className="text-center">
                       <div className="text-[10px] text-amber-400">{"★".repeat(m.rarity)}</div>
@@ -355,13 +369,13 @@ export default function PartyPage() {
                       <div className="text-[10px] text-blue-400 font-mono">☘️ {luck}</div>
                     </div>
 
-                    {/* スロットセットボタン */}
+                    {/* タップ補接用ボタン */}
                     <div className="grid grid-cols-3 gap-1 pt-1">
                       {[0, 1, 2].map((sIdx) => (
                         <button
                           key={sIdx}
                           onClick={() => handleSelectMonster(m, sIdx)}
-                          className={`py-1 text-[10px] font-bold rounded ${
+                          className={`py-1 text-[9px] font-bold rounded ${
                             setSlotIdx === sIdx ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                           }`}
                         >
