@@ -32,7 +32,7 @@ interface Clip {
   effective_wpm?: number | null;
   monster_id?: number | null;
   monsters?: Monster | null;
-  user_luck?: number; // 現在のラック
+  user_luck?: number;
   videos?: {
     youtube_id: string;
     title: string;
@@ -78,13 +78,11 @@ export default function DashboardPage() {
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    // 1. オーブ残高
     const { data: orbRes, error: orbErr } = await supabase.rpc("ensure_initial_orbs");
     if (!orbErr && orbRes !== null) {
       setOrbCount(orbRes);
     }
 
-    // 2. 動画一覧
     const { data: vData } = await supabase
       .from("videos")
       .select("id, youtube_id, title, status, created_at")
@@ -92,7 +90,6 @@ export default function DashboardPage() {
 
     if (vData) setVideos(vData);
 
-    // 3. ユーザーのMonster所持ラック情報取得
     let luckMap: Record<number, number> = {};
     if (user) {
       const { data: uMonData } = await supabase
@@ -107,7 +104,6 @@ export default function DashboardPage() {
       }
     }
 
-    // 4. クリップ一覧（モンスター情報結合）
     const { data: cData } = await supabase
       .from("clips")
       .select("*, videos(youtube_id, title), monsters(*)")
@@ -121,7 +117,6 @@ export default function DashboardPage() {
       setClips(formattedClips);
     }
 
-    // 5. ストレージ使用量
     const { data: assetData } = await supabase
       .from("clip_assets")
       .select("video_bytes");
@@ -377,7 +372,6 @@ export default function DashboardPage() {
 
                   return (
                     <div key={clip.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col justify-between">
-                      {/* サムネイル ＆ 難易度バッジ */}
                       <div className="aspect-video bg-black relative">
                         {thumbUrl ? (
                           <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover" />
@@ -394,7 +388,8 @@ export default function DashboardPage() {
                       <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
                         <div className="space-y-2">
                           <div className="flex justify-between items-start">
-                            <Link href={`/clips/${clip.id}`} className="font-bold text-sm text-gray-900 hover:text-blue-600 line-clamp-1">
+                            {/* ★ 準備（出撃確認）画面へ遷移 */}
+                            <Link href={`/clips/${clip.id}/prepare`} className="font-bold text-sm text-gray-900 hover:text-blue-600 line-clamp-1">
                               {clip.label || "無題のクリップ"}
                             </Link>
                             <div className="flex gap-1 shrink-0">
@@ -417,7 +412,6 @@ export default function DashboardPage() {
                             </div>
                           </div>
 
-                          {/* ★ モンスター ＆ ラック（運極）表示 */}
                           {mon ? (
                             <div className="bg-gray-900 text-white p-2.5 rounded-xl flex items-center justify-between shadow-inner">
                               <div className="flex items-center gap-2.5">
@@ -459,8 +453,9 @@ export default function DashboardPage() {
                           )}
                         </div>
 
+                        {/* ★ 準備（出撃確認）画面へ遷移 */}
                         <Link
-                          href={`/clips/${clip.id}`}
+                          href={`/clips/${clip.id}/prepare`}
                           className="block text-center py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg hover:bg-blue-100"
                         >
                           学習して運極を目指す ➔
