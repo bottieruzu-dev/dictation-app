@@ -109,7 +109,6 @@ export default function PreparePage() {
     void fetchPrepareData();
   }, [id, supabase]);
 
-  // パーティ合計ステータス計算
   const calculateTotalStats = () => {
     let intSum = 0, earSum = 0, vocSum = 0, focSum = 0, lukSum = 0, gutSum = 0;
 
@@ -150,7 +149,7 @@ export default function PreparePage() {
     <main className="min-h-screen bg-gray-950 text-white py-8">
       <div className="max-w-md mx-auto px-4 space-y-5">
         
-        {/* 上部ヘッダー・クエスト（クリップ）タイトル */}
+        {/* 上部ヘッダー */}
         <div className="flex items-center justify-between border-b border-gray-800 pb-3">
           <Link href="/" className="text-xs text-gray-400 hover:text-white font-bold">
             ← キャンセル
@@ -161,7 +160,7 @@ export default function PreparePage() {
           <div className="w-12"></div>
         </div>
 
-        {/* クエスト情報カード（モンスト風枠） */}
+        {/* クエスト情報カード */}
         <div className="bg-gradient-to-b from-gray-900 to-gray-950 border-2 border-indigo-600 rounded-2xl p-4 shadow-xl space-y-3 relative overflow-hidden">
           <div className="flex justify-between items-start border-b border-gray-800 pb-2">
             <div>
@@ -193,14 +192,15 @@ export default function PreparePage() {
           )}
         </div>
 
-        {/* 出撃デッキ（パーティ3体）表示 */}
+        {/* 出撃デッキ表示 */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3 shadow-lg">
           <div className="flex justify-between items-center border-b border-gray-800 pb-2">
             <span className="text-xs font-black text-indigo-300 font-mono">
               ⚔️ 出撃デッキ (スロット 1〜3)
             </span>
+            {/* ★ クリップIDを引き継いでパーティ画面へ遷移 */}
             <Link
-              href="/party"
+              href={`/party?fromClip=${id}`}
               className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg transition-colors"
             >
               編成を変更
@@ -253,7 +253,7 @@ export default function PreparePage() {
           </div>
         </div>
 
-        {/* 大きな出撃（学習開始）ボタン */}
+        {/* 出撃ボタン */}
         <button
           onClick={() => router.push(`/clips/${id}`)}
           className="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:opacity-95 text-white font-black text-lg rounded-2xl shadow-2xl tracking-widest uppercase border border-cyan-400/30 transition-all flex items-center justify-center gap-2 animate-pulse"

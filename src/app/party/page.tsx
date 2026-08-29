@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -23,7 +24,11 @@ interface Monster {
   }[];
 }
 
-export default function PartyPage() {
+function PartyInner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const fromClip = searchParams.get("fromClip"); // 出撃元クリップID
+
   const [ownedMonsters, setOwnedMonsters] = useState<Monster[]>([]);
   const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
   const [draggedMonster, setDraggedMonster] = useState<Monster | null>(null);
@@ -110,7 +115,6 @@ export default function PartyPage() {
     setPartySlots(newSlots);
   };
 
-  // ドラッグ＆ドロップ用ハンドラ
   const handleDrop = (slotIdx: number) => {
     if (draggedMonster) {
       handleSelectMonster(draggedMonster, slotIdx);
@@ -148,7 +152,15 @@ export default function PartyPage() {
         await supabase.from("party").insert(inserts);
       }
 
-      setMessage("🎉 パーティ編成を保存しました！");
+      // ★ 出撃元クリップID（fromClip）がある場合は、保存後にすぐ出撃画面へ復帰！
+      if (fromClip) {
+        setMessage("🎉 編成を保存しました！出撃画面へ戻ります...");
+        setTimeout(() => {
+          router.push(`/clips/${fromClip}/prepare`);
+        }, 600);
+      } else {
+        setMessage("🎉 パーティ編成を保存しました！");
+      }
     } catch (err: any) {
       setMessage(`🚨 エラー: ${err.message}`);
     } finally {
@@ -198,14 +210,15 @@ export default function PartyPage() {
           <div>
             <h1 className="text-2xl font-black">⚔️ パーティ編成</h1>
             <p className="text-xs text-gray-400 mt-1">
-              下のモンスターをドロップ領域へドラッグ＆ドロップして編成できます
+              {fromClip ? "出撃デッキを設定して「保存して出撃画面へ戻る」を押してください" : "下のモンスターをドロップ領域へドラッグ＆ドロップして編成できます"}
             </p>
           </div>
+          {/* ★ キャンセル/戻る先を出撃画面へ動的変更 */}
           <Link
-            href="/"
+            href={fromClip ? `/clips/${fromClip}/prepare` : "/"}
             className="px-3 py-1.5 bg-gray-800 text-gray-200 font-bold text-xs rounded-lg hover:bg-gray-700 transition-colors"
           >
-            ← ダッシュボード
+            {fromClip ? "← 出撃確認へ戻る" : "← ダッシュボード"}
           </Link>
         </div>
 
@@ -268,7 +281,7 @@ export default function PartyPage() {
         {/* 保存ボタン */}
         <div className="flex flex-col items-center gap-2">
           {message && (
-            <div className="p-2.5 bg-indigo-950 border border-indigo-800 text-indigo-300 text-xs font-bold rounded-lg text-center w-full max-w-md">
+            <div className="p-2.5 bg-indigo-950 border border-indigo-800 text-indigo-300 text-xs font-bold rounded-lg text-center w-full max-w-md animate-pulse">
               {message}
             </div>
           )}
@@ -276,9 +289,9 @@ export default function PartyPage() {
           <button
             onClick={handleSaveParty}
             disabled={saving}
-            className="w-full max-w-md py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 text-white font-black text-sm rounded-xl shadow-lg disabled:opacity-50 transition-all"
+            className="w-full max-w-md py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 text-white font-black text-sm rounded-xl shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2"
           >
-            {saving ? "保存中..." : "💾 パーティ編成を保存する"}
+            <span>💾 {fromClip ? "保存して出撃画面へ戻る" : "パーティ編成を保存する"}</span>
           </button>
         </div>
 
@@ -327,7 +340,7 @@ export default function PartyPage() {
           </div>
         </div>
 
-        {/* 3. 所持モンスター（ドラッグ可能リスト） */}
+        {/* 3. 所持モンスター一覧 */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
           <h2 className="text-sm font-bold text-gray-300">
             所持モンスター一覧 (ドラッグしてスロットへ配置)
@@ -369,7 +382,6 @@ export default function PartyPage() {
                       <div className="text-[10px] text-blue-400 font-mono">☘️ {luck}</div>
                     </div>
 
-                    {/* タップ補接用ボタン */}
                     <div className="grid grid-cols-3 gap-1 pt-1">
                       {[0, 1, 2].map((sIdx) => (
                         <button
@@ -392,5 +404,13 @@ export default function PartyPage() {
 
       </div>
     </main>
+  );
+}
+
+export default function PartyPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-950 text-white p-8 text-center text-sm font-mono">読み込み中...</div>}>
+      <PartyInner />
+    </Suspense>
   );
 }
