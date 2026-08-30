@@ -126,7 +126,7 @@ export default function MonstersPage() {
                         src={m.image_url}
                         alt=""
                         onError={handleImageError}
-                        className={`w-full h-full object-cover transition-transform duration-300 ${
+                        className={`w-full h-full object-cover object-top transition-transform duration-300 ${
                           isOwned ? "group-hover:scale-105" : "grayscale contrast-125 sepia opacity-40"
                         }`}
                       />
@@ -182,13 +182,13 @@ export default function MonstersPage() {
                 </button>
               </div>
 
-              {/* イラスト枠 */}
-              <div className="relative aspect-video bg-[#1f1811] rounded-2xl overflow-hidden border-2 border-[#8c6d3f] shadow-inner">
+              {/* イラスト枠（正方形＋上部優先表示に修正） */}
+              <div className="relative aspect-square max-h-64 mx-auto bg-[#1f1811] rounded-2xl overflow-hidden border-2 border-[#8c6d3f] shadow-inner">
                 <img
                   src={selectedMonster.image_url}
                   alt=""
                   onError={handleImageError}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-top"
                 />
               </div>
 
