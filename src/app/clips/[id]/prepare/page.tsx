@@ -41,6 +41,9 @@ export default function PreparePage() {
   const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
   const [loading, setLoading] = useState(true);
 
+  // 再生速度 (0.5x ～ 2.0x)
+  const [speed, setSpeed] = useState<number>(1.0);
+
   const supabase = createClient();
 
   const getLuckMultiplier = (luck: number) => {
@@ -50,6 +53,12 @@ export default function PreparePage() {
     if (luck >= 30) return 1.08;
     if (luck >= 10) return 1.03;
     return 1.0;
+  };
+
+  // ドロップ倍率計算: 1.0x -> x1.0, 0.6x -> x0.2, 1.5x -> x2.0
+  const getDropMultiplier = (spd: number) => {
+    const mult = 1.0 + (spd - 1.0) * 2.0;
+    return Math.max(0.1, parseFloat(mult.toFixed(2)));
   };
 
   useEffect(() => {
@@ -136,6 +145,7 @@ export default function PreparePage() {
   };
 
   const stats = calculateTotalStats();
+  const dropMult = getDropMultiplier(speed);
 
   if (loading) {
     return <div className="min-h-screen bg-gray-950 text-white p-8 text-center text-sm font-mono">出撃データを確認中...</div>;
@@ -188,6 +198,55 @@ export default function PreparePage() {
           ) : (
             <div className="text-xs text-gray-500 text-center py-2 font-mono">ターゲットモンスター未割り当て</div>
           )}
+        </div>
+
+        {/* ⚡ 再生速度設定 ＆ ドロップ倍率計算パネル */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3 shadow-lg">
+          <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+            <span className="text-xs font-black text-cyan-300 font-mono flex items-center gap-1">
+              ⚡ 再生速度 ＆ ドロップ率設定
+            </span>
+            <span className={`text-xs font-black font-mono px-2 py-0.5 rounded ${
+              dropMult > 1.0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+            }`}>
+              ドロップ率倍率: ×{dropMult.toFixed(2)}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-xs font-mono">
+              <span className="text-gray-400">速度: <strong className="text-white text-sm">{speed.toFixed(1)}x</strong></span>
+              <span className="text-[10px] text-gray-500">（速いほどドロップ率大幅UP!）</span>
+            </div>
+
+            {/* 速度スライダー */}
+            <input
+              type="range"
+              min={0.5}
+              max={2.0}
+              step={0.1}
+              value={speed}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
+              className="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+            />
+
+            {/* クイック選択プリセットボタン */}
+            <div className="grid grid-cols-5 gap-1.5 pt-1">
+              {[0.6, 0.8, 1.0, 1.2, 1.5].map((preset) => (
+                <button
+                  key={preset}
+                  onClick={() => setSpeed(preset)}
+                  className={`py-1.5 text-[10px] font-black font-mono rounded-lg transition-all ${
+                    speed === preset
+                      ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/20'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {preset}x
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* 出撃デッキ表示 */}
@@ -250,9 +309,9 @@ export default function PreparePage() {
           </div>
         </div>
 
-        {/* 出撃ボタン */}
+        {/* 出撃ボタン (speed パラメータを付与して遷移) */}
         <button
-          onClick={() => router.push(`/clips/${id}`)}
+          onClick={() => router.push(`/clips/${id}?speed=${speed}`)}
           className="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:opacity-95 text-white font-black text-lg rounded-2xl shadow-2xl tracking-widest uppercase border border-cyan-400/30 transition-all flex items-center justify-center gap-2 animate-pulse"
         >
           <span>🔥 出 撃 （学習スタート）</span>
