@@ -215,7 +215,6 @@ export default function DashboardPage() {
     void fetchData();
   };
 
-  // 難易度に応じたネオンカラー・発光定義
   const getTierStyle = (tier?: string | null) => {
     switch (tier) {
       case "初級":
@@ -282,11 +281,10 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-slate-950 text-slate-100 font-sans py-6 selection:bg-cyan-500 selection:text-black">
       <div className="max-w-4xl mx-auto px-4 space-y-6">
         
-        {/* ================= ソシャゲ風ステータスヘッダー ================= */}
+        {/* ステータスヘッダー */}
         <header className="bg-slate-900/90 border border-slate-800/80 backdrop-blur-md rounded-2xl p-4 shadow-2xl space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             
-            {/* アプリロゴ ＆ プレイヤー情報 */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-0.5 shadow-lg shadow-purple-500/20">
                 <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-xl font-black text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-indigo-300">
@@ -302,9 +300,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* オーブ ＆ R2ストレージゲージ（ソーシャルゲームのパラメータ風） */}
             <div className="flex items-center gap-3 self-end md:self-auto font-mono">
-              {/* オーブ数表示 */}
               <div className="bg-gradient-to-r from-slate-950 to-slate-900 border border-cyan-500/40 px-4 py-2 rounded-xl shadow-lg flex items-center gap-2.5 relative overflow-hidden group">
                 <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="text-xl animate-pulse">💎</span>
@@ -314,7 +310,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* クラウド容量表示 */}
               <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-right">
                 <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">R2 STORAGE</div>
                 <div className="text-xs font-bold text-indigo-400 leading-tight mt-0.5">{storageMb} <span className="text-[10px] text-slate-500">MB / 10 GB</span></div>
@@ -322,7 +317,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ナビゲーションメタリックボタン群 */}
           <nav className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
             <Link
               href="/party"
@@ -354,7 +348,7 @@ export default function DashboardPage() {
           </nav>
         </header>
 
-        {/* ================= YouTube追加フォーム ================= */}
+        {/* YouTube追加フォーム */}
         <section className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 shadow-xl backdrop-blur-sm">
           <h2 className="text-xs font-extrabold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
             <span>📹</span> 新規YouTube動画を取り込む
@@ -383,7 +377,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* ================= 検索バー ＆ メニュータブ ================= */}
+        {/* 検索バー ＆ メニュータブ */}
         <div className="space-y-3">
           <div className="relative">
             <input
@@ -419,7 +413,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ================= クリップ一覧 (ソシャゲ・クエストカード化) ================= */}
+        {/* クリップ一覧 */}
         {activeTab === "clips" && (
           <section>
             {loading ? (
@@ -444,7 +438,6 @@ export default function DashboardPage() {
                       key={clip.id}
                       className={`bg-slate-900/80 border rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transition-all duration-200 ${style.cardBorder}`}
                     >
-                      {/* クエストサムネイル ＆ 難易度ネオンバッジ */}
                       <div className="aspect-video bg-black relative overflow-hidden group">
                         {thumbUrl ? (
                           <img
@@ -456,7 +449,6 @@ export default function DashboardPage() {
                           <div className="w-full h-full bg-slate-950 flex items-center justify-center text-slate-700 font-mono text-xs">NO THUMBNAIL</div>
                         )}
 
-                        {/* 難易度バッジ */}
                         {clip.difficulty_tier && (
                           <span
                             className={`absolute top-2.5 left-2.5 px-3 py-1 rounded-full text-[10px] font-black font-mono border backdrop-blur-md shadow-lg ${style.badge}`}
@@ -465,7 +457,6 @@ export default function DashboardPage() {
                           </span>
                         )}
 
-                        {/* WPMバッジ */}
                         {clip.effective_wpm && (
                           <span className="absolute bottom-2 right-2 bg-slate-950/80 backdrop-blur-md text-slate-400 font-mono text-[9px] px-2 py-0.5 rounded border border-slate-800">
                             WPM: {clip.effective_wpm}
@@ -473,7 +464,6 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      {/* クエスト詳細 ＆ ターゲットモンスター枠 */}
                       <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
                         <div className="space-y-2.5">
                           <div className="flex justify-between items-start gap-2">
@@ -503,32 +493,34 @@ export default function DashboardPage() {
                             </div>
                           </div>
 
-                          {/* ソシャゲ風ターゲットモンスター情報パネル */}
+                          {/* ★ 改修ポイント：モンスターパネル領域の幅をフルに使い、2行対応にする */}
                           {mon ? (
-                            <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between shadow-inner">
-                              <div className="flex items-center gap-2.5">
+                            <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between shadow-inner gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                 <img
                                   src={mon.image_url}
                                   alt={mon.name}
-                                  className="w-10 h-10 object-cover rounded-lg border border-slate-800 shadow"
+                                  className="w-10 h-10 object-cover rounded-lg border border-slate-800 shadow shrink-0"
                                 />
-                                <div>
-                                  <div className="text-[9px] text-amber-400 font-bold tracking-widest">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[9px] text-amber-400 font-bold tracking-widest leading-none mb-1">
                                     {"★".repeat(mon.rarity)}
                                   </div>
-                                  <div className="text-xs font-black text-slate-200 truncate max-w-[100px] sm:max-w-[120px]">
+                                  
+                                  {/* モンスター名（2行表示を許容・二つ名も全見せ） */}
+                                  <div className="text-xs font-black text-slate-200 line-clamp-2 leading-tight">
                                     {mon.name}
                                   </div>
                                 </div>
                               </div>
 
-                              <div className="text-right font-mono">
-                                <div className="text-xs font-black text-cyan-400">☘️ ラック {currentLuck}</div>
-                                <div className="text-[9px] text-slate-500">
+                              <div className="text-right font-mono shrink-0 pl-1">
+                                <div className="text-xs font-black text-cyan-400">☘️ {currentLuck}</div>
+                                <div className="text-[9px] text-slate-500 whitespace-nowrap">
                                   {isLuckMax ? (
-                                    <span className="text-amber-400 font-black animate-pulse">👑 運極達成!</span>
+                                    <span className="text-amber-400 font-black animate-pulse">👑 運極</span>
                                   ) : (
-                                    <span>運極まで あと {remainingLuck} 体</span>
+                                    <span>あと {remainingLuck}</span>
                                   )}
                                 </div>
                               </div>
@@ -539,7 +531,6 @@ export default function DashboardPage() {
                             </div>
                           )}
 
-                          {/* タグ表示 */}
                           {clip.tags && clip.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1">
                               {clip.tags.map((t, idx) => (
@@ -555,7 +546,6 @@ export default function DashboardPage() {
                           )}
                         </div>
 
-                        {/* ソシャゲ風立体出撃ボタン */}
                         <Link
                           href={`/clips/${clip.id}/prepare`}
                           className="block text-center py-2.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg shadow-cyan-950/30 border border-cyan-400/20 transition-all uppercase tracking-wider"
@@ -571,7 +561,7 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* ================= 動画原本一覧タブ ================= */}
+        {/* 動画原本一覧 */}
         {activeTab === "videos" && (
           <section>
             {loading ? (
