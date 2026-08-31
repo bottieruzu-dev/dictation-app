@@ -93,7 +93,7 @@ export default function RomancePage() {
       setDisplayName(prof.display_name || "Takumi");
       setRomancePoints(prof.romance_points || 0);
     } else {
-      await supabase.from("profiles").insert({ id: user.id, display_name: "Takumi", romance_points: 100 });
+      await supabase.from("profiles").upsert({ id: user.id, display_name: "Takumi", romance_points: 100 });
       setRomancePoints(100);
     }
 
@@ -103,7 +103,8 @@ export default function RomancePage() {
       .select("*", { count: "exact", head: true })
       .eq("owner_id", user.id);
 
-    setOwnedMonstersCount(mCount || 0);
+    const mTotal = mCount || 0;
+    setOwnedMonstersCount(mTotal);
 
     // 3. 国一覧
     const { data: cData } = await supabase
@@ -111,7 +112,11 @@ export default function RomancePage() {
       .select("*")
       .order("id", { ascending: true });
 
-    if (cData) setCountries(cData);
+    if (cData && cData.length > 0) {
+      setCountries(cData);
+      // 初期状態の第一カ国（アメリカなど）を自動選択
+      setSelectedCountry(cData[0]);
+    }
 
     // 4. ヒロイン一覧 ＆ ユーザー進行度
     const { data: hData } = await supabase
@@ -184,7 +189,6 @@ export default function RomancePage() {
       return;
     }
 
-    // レベルアップに必要なコスト定義（シークレットヒロインは高コスト）
     const costMap: Record<number, number> = heroine.is_secret
       ? { 1: 1000, 2: 3000, 3: 6000, 4: 20000 }
       : { 1: 200, 2: 500, 3: 1000, 4: 2000 };
@@ -199,7 +203,6 @@ export default function RomancePage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // RP消費 ＆ レベルアップ
     const newRp = romancePoints - requiredCost;
     const nextLevel = currentLevel + 1;
 
@@ -210,7 +213,7 @@ export default function RomancePage() {
 
     setRomancePoints(newRp);
 
-    // デート会話イベント起動！
+    // デート会話イベント起動
     const dEvent = dateEvents.find((d) => d.heroine_id === heroine.id && d.affection_level === nextLevel);
     if (dEvent) {
       setNovelDialogue({
@@ -237,6 +240,8 @@ export default function RomancePage() {
   if (loading) {
     return <div className="min-h-screen bg-slate-950 text-pink-400 p-8 text-center text-xs font-mono">LOADING WORLD ROMANCE DATA...</div>;
   }
+
+  const unlockedCountriesCount = countries.filter(c => ownedMonstersCount >= c.required_monsters).length;
 
   return (
     <main className="min-h-screen bg-[#0d0914] text-slate-100 font-sans py-6 px-3 sm:px-6 relative selection:bg-pink-500 selection:text-white">
@@ -279,7 +284,7 @@ export default function RomancePage() {
         <section className="bg-slate-900/80 border border-purple-900/50 rounded-2xl p-4 space-y-4 shadow-xl">
           <div className="flex justify-between items-center border-b border-slate-800 pb-2">
             <span className="text-xs font-black text-pink-400 font-mono flex items-center gap-1.5">
-              <span>🗺️</span> WORLD MAP (解放国: {countries.filter(c => ownedMonstersCount >= c.required_monsters).length} / {countries.length})
+              <span>🗺️</span> WORLD MAP (解放国: {unlockedCountriesCount} / {countries.length})
             </span>
             <span className="text-[10px] text-slate-400 font-mono">図鑑所持: 📖 {ownedMonstersCount} 体</span>
           </div>
@@ -335,7 +340,7 @@ export default function RomancePage() {
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               {heroines.filter(h => h.country_id === selectedCountry.id).map((h) => {
-                const userH = h.user_monsters && h.user_monsters.length > 0 ? h.user_monsters[0] : null;
+                const userH = h.user_heroines && h.user_heroines.length > 0 ? h.user_heroines[0] : null;
                 const isUnlocked = userH?.unlocked ?? false;
                 const affection = userH?.affection_level ?? 1;
 
@@ -391,7 +396,7 @@ export default function RomancePage() {
         {activeHeroine && (
           <section className="bg-gradient-to-b from-slate-900 to-[#180f24] border-2 border-pink-500 rounded-2xl p-5 shadow-2xl space-y-4 animate-fadeIn">
             {(() => {
-              const userH = activeHeroine.user_monsters && activeHeroine.user_monsters.length > 0 ? activeHeroine.user_monsters[0] : null;
+              const userH = activeHeroine.user_heroines && activeHeroine.user_heroines.length > 0 ? activeHeroine.user_heroines[0] : null;
               const isUnlocked = userH?.unlocked ?? false;
               const affection = userH?.affection_level ?? 1;
 
