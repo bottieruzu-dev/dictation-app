@@ -79,8 +79,12 @@ function ClipBattleInner() {
   const router = useRouter();
   const id = params?.id as string;
 
-  // 出撃前画面で指定された再生速度
   const speedParam = parseFloat(searchParams.get('speed') || '1.0');
+
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const [clip, setClip] = useState<any>(null);
   const [targetMonster, setTargetMonster] = useState<Monster | null>(null);
@@ -88,15 +92,16 @@ function ClipBattleInner() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // バトルステータス
   const [playerMaxHp, setPlayerMaxHp] = useState(1000);
   const [playerHp, setPlayerHp] = useState(1000);
-  const [playerBaseAtk, setPlayerAtk] = useState(200);
+  const [playerBaseAtk, setPlayerAtk] = useState(100);
 
-  const [bossMaxHp, setBossMaxHp] = useState(2000);
-  const [bossHp, setBossHp] = useState(2000);
-  const [bossAtk, setBossAtk] = useState(150);
+  const [bossMaxHp, setBossMaxHp] = useState(5000);
+  const [bossHp, setBossHp] = useState(5000);
+  const [bossAtk, setBossAtk] = useState(120);
 
   const [comboCount, setComboCount] = useState(0);
   const [activeSegIndex, setActiveSegIndex] = useState(0);
@@ -106,7 +111,7 @@ function ClipBattleInner() {
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
 
-  // 💥 アニメーションエフェクト演出用ステート
+  // アニメーション演出用ステート
   const [damagePopup, setDamagePopup] = useState<number | null>(null);
   const [isAttackingAnim, setIsAttackingAnim] = useState(false);
   const [skillMessage, setSkillMessage] = useState<string | null>(null);
@@ -114,30 +119,55 @@ function ClipBattleInner() {
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [hintCharges, setHintCharges] = useState(0);
 
-  // モーダル
+  // モーダル管理
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isContinueModalOpen, setIsContinueModalOpen] = useState(false);
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
   const [dropResult, setDropResult] = useState<any>(null);
   const [isSubmittingSession, setIsSubmittingSession] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const { url: signedUrl } = useSignedUrl(id, 'video');
+  const { url: signedUrl } = useSignedUrl(signedIn ? id : null, 'video');
   const supabase = createClient();
 
   useEffect(() => {
-    if (!id) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setSignedIn(!!data.session);
+    });
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!id || signedIn === null) return;
+
+    if (!signedIn) {
+      setLoading(false);
+      return;
+    }
 
     async function fetchData() {
       setLoading(true);
+      setErrorMsg(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
+      try {
+        const { data: { user }, error: userErr } = await supabase.auth.getUser();
+        if (userErr || !user) {
+          setSignedIn(false);
+          return;
+        }
 
-      const { data: clipData } = await supabase
-        .from('clips')
-        .select('*, videos(youtube_id, title), monsters(*)')
-        .eq('id', id)
-        .maybeSingle();
+        const { data: clipData, error: clipErr } = await supabase
+          .from('clips')
+          .select('*, videos(youtube_id, title), monsters(*)')
+          .eq('id', id)
+          .maybeSingle();
 
-      if (clipData) {
+        if (clipErr) throw clipErr;
+
+        if (!clipData) {
+          setErrorMsg('指定されたクリップが見つかりませんでした。');
+          return;
+        }
+
         setClip(clipData);
 
         let boss = clipData.monsters;
@@ -150,50 +180,49 @@ function ClipBattleInner() {
         setTargetMonster(boss);
 
         const dScore = clipData.difficulty_score || 50;
-        const bMaxHp = Math.round(dScore * 40 + (boss?.rarity || 1) * 300);
-        const bAtk = Math.round(dScore * 2 + (boss?.rarity || 1) * 20);
+        const bMaxHp = Math.round(dScore * 120 + (boss?.rarity || 1) * 800);
+        const bAtk = Math.round(dScore * 1.5 + (boss?.rarity || 1) * 25);
         setBossMaxHp(bMaxHp);
         setBossHp(bMaxHp);
         setBossAtk(bAtk);
 
-        if (user) {
-          const { data: pList } = await supabase
-            .from('party')
-            .select('slot, monsters(*)')
-            .eq('owner_id', user.id)
-            .order('slot', { ascending: true });
+        const { data: pList } = await supabase
+          .from('party')
+          .select('slot, monsters(*)')
+          .eq('owner_id', user.id)
+          .order('slot', { ascending: true });
 
-          if (pList) {
-            const formatted: PartyMonster[] = pList.map((p) => ({
-              slot: p.slot,
-              monster: p.monsters as any,
-              used: false,
-            }));
-            setPartyMonsters(formatted);
+        if (pList) {
+          const formatted: PartyMonster[] = pList.map((p) => ({
+            slot: p.slot,
+            monster: p.monsters as any,
+            used: false,
+          }));
+          setPartyMonsters(formatted);
 
-            let gutSum = 0, focSum = 0, intSum = 0, vocSum = 0;
-            formatted.forEach((pm) => {
-              gutSum += pm.monster.stat_gut || 50;
-              focSum += pm.monster.stat_foc || 50;
-              intSum += pm.monster.stat_int || 50;
-              vocSum += pm.monster.stat_voc || 50;
-            });
+          let gutSum = 0, focSum = 0, intSum = 0, vocSum = 0;
+          formatted.forEach((pm) => {
+            if (!pm.monster) return;
+            gutSum += pm.monster.stat_gut || 50;
+            focSum += pm.monster.stat_foc || 50;
+            intSum += pm.monster.stat_int || 50;
+            vocSum += pm.monster.stat_voc || 50;
+          });
 
-            const pHp = gutSum * 10 + focSum * 5 + 500;
-            const pAtk = Math.round(intSum * 1.5 + vocSum * 1.0 + 100);
+          const pHp = gutSum * 8 + focSum * 4 + 400;
+          const pAtk = Math.round(intSum * 0.4 + vocSum * 0.3 + 30);
 
-            setPlayerMaxHp(pHp);
-            setPlayerHp(pHp);
-            setPlayerAtk(pAtk);
+          setPlayerMaxHp(pHp);
+          setPlayerHp(pHp);
+          setPlayerAtk(pAtk);
 
-            const leader = formatted.find((p) => p.slot === 1);
-            if (leader) {
-              setHintCharges(Math.min(5, Math.floor((leader.monster.stat_voc || 0) / 400)) + 1);
-            }
+          const leader = formatted.find((p) => p.slot === 1);
+          if (leader && leader.monster) {
+            setHintCharges(Math.min(5, Math.floor((leader.monster.stat_voc || 0) / 400)) + 1);
           }
         }
 
-        const { data: segData } = await supabase
+        const { data: segData, error: segErr } = await supabase
           .from('segments')
           .select('*')
           .eq('video_id', clipData.video_id)
@@ -201,21 +230,35 @@ function ClipBattleInner() {
           .lte('idx', clipData.seg_to ?? 9999)
           .order('idx', { ascending: true });
 
+        if (segErr) throw segErr;
         if (segData) setSegments(segData);
 
-        const { data: itemData } = await supabase
+        const { data: itemData, error: itemErr } = await supabase
           .from('cloze_items')
           .select('*')
           .eq('clip_id', id);
 
+        if (itemErr) throw itemErr;
         if (itemData) setClozeItems(itemData);
-      }
 
-      setLoading(false);
+      } catch (err: any) {
+        console.error('Fetch error:', err);
+        setErrorMsg(`データ読み込みエラー: ${err.message || String(err)}`);
+      } finally {
+        setLoading(false);
+      }
     }
 
     fetchData();
-  }, [id]);
+  }, [id, signedIn, supabase]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    else setSignedIn(true);
+  };
 
   const handleInputChange = (key: string, value: string) => {
     setUserAnswers((prev) => ({ ...prev, [key]: value }));
@@ -279,7 +322,6 @@ function ClipBattleInner() {
     }
   };
 
-  // ⚔️ シングルラウンド（1文章）攻撃 ＆ アニメーション演出処理
   const handleAttackRound = () => {
     const currentSeg = segments[activeSegIndex];
     if (!currentSeg) return;
@@ -328,7 +370,6 @@ function ClipBattleInner() {
     const comboMult = 1.0 + currentCombo * 0.1;
     const damageToBoss = Math.round(playerBaseAtk * roundAccuracy * attrMult * comboMult);
 
-    // 💥 光弾攻撃 ＆ ダメージ数値ポップアップ演出
     setIsAttackingAnim(true);
     setDamagePopup(damageToBoss);
 
@@ -341,7 +382,6 @@ function ClipBattleInner() {
         setDamagePopup(null);
       }, 1000);
 
-      // 反撃
       const bossDamage = Math.round(bossAtk * (1.0 - roundAccuracy * 0.5));
       const newPlayerHp = Math.max(0, playerHp - bossDamage);
       setPlayerHp(newPlayerHp);
@@ -351,22 +391,66 @@ function ClipBattleInner() {
         return;
       }
 
-      // 次の文章ラウンドへ進む
-      if (activeSegIndex < segments.length - 1) {
-        const nextIdx = activeSegIndex + 1;
-        setActiveSegIndex(nextIdx);
-        setSeekToTime(segments[nextIdx].start_ms / 1000);
-      } else {
-        if (newBossHp > bossMaxHp * 0.5) {
-          setIsGameOverModalOpen(true);
-        } else {
-          setIsAwakened(true);
-        }
-      }
+      setSaveMessage(null);
+      setIsReviewModalOpen(true);
+
     }, 400);
   };
 
-  // 🔥 覚醒ボスへの最終一括攻撃
+  const handleProceedNextRound = () => {
+    setIsReviewModalOpen(false);
+
+    if (activeSegIndex < segments.length - 1) {
+      const nextIdx = activeSegIndex + 1;
+      setActiveSegIndex(nextIdx);
+      setSeekToTime(segments[nextIdx].start_ms / 1000);
+    } else {
+      if (bossHp > bossMaxHp * 0.5) {
+        setIsGameOverModalOpen(true);
+      } else {
+        setIsAwakened(true);
+      }
+    }
+  };
+
+  const handleSaveMistakes = async () => {
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    let savedCount = 0;
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const key = `${currentSeg.id}-${wIdx}`;
+      const res = results[key];
+
+      if (res && !res.isCorrect) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        await supabase.from('attempts').insert({
+          owner_id: user.id,
+          clip_id: id,
+          segment_id: currentSeg.id,
+          item_id: item?.id || null,
+          input_raw: userAnswers[key] || '',
+          answer_gold: res.answer,
+          score: 0.0,
+          is_correct: false,
+        });
+        savedCount++;
+      }
+    }
+
+    if (savedCount > 0) {
+      setSaveMessage(`💾 ${savedCount} 件の間違いをノートに保存しました！`);
+    } else {
+      setSaveMessage('🎉 全問正解です！保存する誤答はありません。');
+    }
+  };
+
   const handleFinalAttack = async () => {
     setIsSubmittingSession(true);
 
@@ -399,7 +483,7 @@ function ClipBattleInner() {
     }
 
     const rawAccuracy = totalTargetCount > 0 ? (totalCorrectCount / totalTargetCount) * 100 : 0;
-    const finalDamage = Math.round(playerBaseAtk * (rawAccuracy / 100) * 3.0);
+    const finalDamage = Math.round(playerBaseAtk * (rawAccuracy / 100) * 4.0);
 
     setIsAttackingAnim(true);
     setDamagePopup(finalDamage);
@@ -479,14 +563,37 @@ function ClipBattleInner() {
     }
   };
 
+  if (signedIn === false) {
+    return (
+      <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-16 p-6 space-y-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl text-white">
+        <h2 className="text-xl font-black text-center tracking-wide">PLAYER LOGIN</h2>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
+        <button className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white py-3 rounded-xl font-black text-sm shadow-lg transition-all">ログイン</button>
+        {authError && <p className="text-red-400 text-xs text-center font-mono">{authError}</p>}
+      </form>
+    );
+  }
+
   if (loading) return <div className="min-h-screen bg-slate-950 text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>;
+
+  if (errorMsg) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white p-8 flex flex-col items-center justify-center space-y-4 text-center">
+        <p className="text-sm text-red-400 font-mono">{errorMsg}</p>
+        <Link href="/" className="px-4 py-2 bg-slate-800 text-cyan-400 rounded-xl text-xs font-bold">
+          ◀ ダッシュボードに戻る
+        </Link>
+      </div>
+    );
+  }
 
   const currentSeg = segments[activeSegIndex];
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 font-sans p-2 sm:p-4 flex flex-col justify-between max-w-md mx-auto relative overflow-hidden select-none">
       
-      {/* 画面トップ：コンパクトヘッダー */}
+      {/* 1. ヘッダー */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
         <h1 className="text-xs font-black text-white truncate max-w-[200px]">
           {clip?.label || 'ダンジョン'}
@@ -496,42 +603,31 @@ function ClipBattleInner() {
         </Link>
       </div>
 
-      {/* ================= 1. パズドラ風 巨大敵ボス表示 ＆ HPバー ================= */}
+      {/* ================= 2. パズドラ風 巨大敵ボス表示 ＆ HPバー ================= */}
       {targetMonster && (
         <div className="relative bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl flex flex-col items-center space-y-2 overflow-hidden">
           
-          {/* 光弾攻撃ヒット演出 */}
           {isAttackingAnim && (
-            <div className="absolute inset-0 bg-cyan-400/30 backdrop-blur-[1px] z-30 flex items-center justify-center animate-ping" />
+            <div className="absolute inset-0 bg-cyan-400/40 backdrop-blur-[1px] z-30 flex items-center justify-center animate-ping" />
           )}
 
-          {/* 浮遊ダメージ数値ポップアップ */}
           {damagePopup !== null && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 text-4xl font-black text-red-500 font-mono drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] animate-bounce">
               -{damagePopup}
             </div>
           )}
 
-          {/* ボス名 ＆ 属性 */}
-          <div className="w-full flex justify-between items-center text-xs font-mono border-b border-slate-800 pb-1 z-10">
-            <span className="font-black text-white truncate max-w-[180px]">
-              {targetMonster.name} {isAwakened && "🔥[覚醒]"}
-            </span>
-            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800">
-              {targetMonster.element}
-            </span>
-          </div>
-
-          {/* パズドラ風 特大敵キャラクター表示 */}
-          <div className="relative w-36 h-36 bg-slate-950 rounded-2xl overflow-hidden border-2 border-red-500/50 shadow-xl my-1">
+          <div className="relative w-36 h-36 bg-slate-950 rounded-2xl overflow-hidden border-2 border-red-500/50 shadow-xl my-0.5">
             <img
               src={targetMonster.image_url}
-              alt={targetMonster.name}
+              alt=""
               className={`w-full h-full object-cover object-top transition-all duration-300 ${isAttackingAnim ? "scale-95 filter brightness-150" : ""}`}
             />
+            <div className="absolute top-1.5 right-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 shadow">
+              {targetMonster.element} {isAwakened && "🔥AWAKENED"}
+            </div>
           </div>
 
-          {/* ボスHPゲージ */}
           <div className="w-full space-y-0.5 z-10">
             <div className="flex justify-between items-center text-[9px] font-mono text-slate-400">
               <span>BOSS HP</span>
@@ -547,7 +643,7 @@ function ClipBattleInner() {
         </div>
       )}
 
-      {/* ================= 2. 味方パーティ ＆ プレイヤーHPバー ================= */}
+      {/* ================= 3. 味方パーティ ＆ プレイヤーHPバー ================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 space-y-2 shadow-xl my-2">
         <div className="flex justify-between items-center text-[10px] font-mono">
           <div className="flex items-center gap-1.5">
@@ -564,7 +660,6 @@ function ClipBattleInner() {
           </div>
         </div>
 
-        {/* プレイヤーHPゲージ */}
         <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
           <div
             className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-300"
@@ -572,7 +667,6 @@ function ClipBattleInner() {
           />
         </div>
 
-        {/* 味方パーティ3体アイコン (タップでスキル確認・発動) */}
         <div className="grid grid-cols-3 gap-1.5">
           {partyMonsters.map((p) => (
             <button
@@ -585,9 +679,9 @@ function ClipBattleInner() {
                   : "bg-indigo-950/80 border-indigo-600 hover:border-cyan-400 active:scale-95 cursor-pointer shadow"
               }`}
             >
-              <img src={p.monster.image_url} alt={p.monster.name} className="w-8 h-8 object-cover rounded-lg border border-indigo-500/40 shrink-0" />
+              <img src={p.monster?.image_url} alt="" className="w-8 h-8 object-cover rounded-lg border border-indigo-500/40 shrink-0" />
               <div className="text-left min-w-0 flex-1">
-                <div className="text-[9px] font-bold text-slate-200 truncate">{p.monster.name}</div>
+                <div className="text-[9px] font-bold text-slate-200 truncate">{p.monster?.name}</div>
                 <div className={`text-[8px] font-black px-1 py-0.2 rounded inline-block ${p.used ? "bg-slate-800 text-slate-500" : "bg-cyan-500 text-black"}`}>
                   {p.used ? "USED" : "SKILL"}
                 </div>
@@ -603,10 +697,9 @@ function ClipBattleInner() {
         </div>
       )}
 
-      {/* ================= 3. パズドラの盤面位置：動画 ＆ 1文章ディクテーション ================= */}
+      {/* ================= 4. パズドラの盤面位置：動画 ＆ 穴埋め入力エリア ================= */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3">
         
-        {/* 動画プレイヤー (出撃時設定速度 ＆ 1文オートループ再生対応) */}
         {signedUrl && currentSeg && (
           <ClipPlayer
             src={signedUrl}
@@ -617,7 +710,6 @@ function ClipBattleInner() {
           />
         )}
 
-        {/* 穴埋め入力エリア (Wave 1 〜 N) */}
         {!isAwakened && currentSeg && (
           <div className="space-y-3">
             <div className="flex justify-between items-center text-xs font-mono border-b border-slate-800 pb-1.5">
@@ -629,7 +721,6 @@ function ClipBattleInner() {
               </span>
             </div>
 
-            {/* ディクテーション空欄 */}
             <div className="flex flex-wrap gap-1.5 items-center font-mono py-1 min-h-[50px] justify-center">
               { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
                 const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
@@ -681,7 +772,6 @@ function ClipBattleInner() {
               })}
             </div>
 
-            {/* ⚔️ 攻撃ボタン */}
             <button
               onClick={handleAttackRound}
               className="w-full py-2.5 bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg border border-orange-400/30 transition-all uppercase tracking-widest flex items-center justify-center gap-1"
@@ -691,7 +781,6 @@ function ClipBattleInner() {
           </div>
         )}
 
-        {/* ボス覚醒状態（ファイナルウェーブ） */}
         {isAwakened && (
           <div className="text-center space-y-2 py-2">
             <span className="bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase animate-bounce inline-block">
@@ -709,7 +798,89 @@ function ClipBattleInner() {
 
       </div>
 
-      {/* モーダル群 */}
+      {/* ================= 5. ラウンド正誤判定 ＆ 構文・日本語訳解説モーダル ================= */}
+      {isReviewModalOpen && currentSeg && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-cyan-500/80 rounded-2xl p-5 max-w-sm w-full space-y-4 text-white shadow-2xl font-sans">
+            <div className="text-center space-y-1 border-b border-slate-800 pb-2">
+              <span className="bg-cyan-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                ROUND #{activeSegIndex + 1} RESULT
+              </span>
+              <h3 className="text-sm font-black text-white">ラウンド結果 ＆ 解説</h3>
+            </div>
+
+            <div className="bg-slate-950 p-3 rounded-xl space-y-2 border border-slate-800 text-xs font-mono max-h-48 overflow-y-auto">
+              <div className="text-[10px] text-slate-400 font-bold border-b border-slate-800 pb-1">
+                【単語チェック】
+              </div>
+              { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
+                const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+                const key = `${currentSeg.id}-${wIdx}`;
+                const item = segItems.find((it) => it.word_from === wIdx);
+                const res = results[key];
+                const isTarget = segItems.length > 0 ? !!item : true;
+
+                if (!isTarget) return null;
+
+                return (
+                  <div key={wIdx} className="flex justify-between items-center text-[11px] py-0.5">
+                    <span className="text-slate-400">#Word {wIdx + 1}:</span>
+                    {res ? (
+                      res.isCorrect ? (
+                        <span className="text-green-400 font-bold">○ {res.answer} (正解)</span>
+                      ) : (
+                        <span className="text-red-400 font-bold">
+                          × {userAnswers[key] || "（未入力）"} ➔ <u className="underline">{res.answer}</u>
+                        </span>
+                      )
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs">
+              {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
+                <div className="space-y-1">
+                  {currentSeg.skeletons.map((sk, idx) => (
+                    <div key={idx} className="bg-blue-950/80 text-blue-300 p-2 rounded-lg font-mono text-[10px]">
+                      💡 構文: <strong>{sk.text}</strong> ({sk.label})
+                    </div>
+                  ))}
+                </div>
+              )}
+              {currentSeg.ja_text && (
+                <div className="bg-slate-900 text-slate-200 p-2 rounded-lg text-[11px] leading-relaxed">
+                  💡 <strong>訳:</strong> {currentSeg.ja_text}
+                </div>
+              )}
+            </div>
+
+            {saveMessage && (
+              <p className="text-[10px] text-cyan-300 font-mono text-center bg-cyan-950 p-2 rounded-lg border border-cyan-800">
+                {saveMessage}
+              </p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleSaveMistakes}
+                className="flex-1 py-2.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 font-bold text-xs rounded-xl border border-purple-600 transition-colors"
+              >
+                💾 ノート保存
+              </button>
+              <button
+                onClick={handleProceedNextRound}
+                className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 text-white font-black text-xs rounded-xl shadow-lg transition-all"
+              >
+                次へ進む ➔
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💎 コンティニューモーダル */}
       {isContinueModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-slate-900 border-2 border-red-500 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
@@ -730,6 +901,7 @@ function ClipBattleInner() {
         </div>
       )}
 
+      {/* 🚨 ゲームオーバーモーダル */}
       {isGameOverModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
@@ -743,6 +915,7 @@ function ClipBattleInner() {
         </div>
       )}
 
+      {/* 🏆 クエストクリア */}
       {dropResult && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-slate-900 border-2 border-emerald-500 text-white p-5 rounded-2xl max-w-xs w-full text-center space-y-3 shadow-2xl">
