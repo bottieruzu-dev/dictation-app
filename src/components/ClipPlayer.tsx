@@ -27,6 +27,16 @@ export default function ClipPlayer({
   const bufferedStart = segmentStart !== null ? Math.max(0, segmentStart - 0.3) : null;
   const bufferedEnd = segmentEnd !== null ? segmentEnd + 0.1 : null;
 
+  // リアルタイムに最新の範囲を参照するためのRef
+  const rangeRef = useRef<{ start: number | null; end: number | null }>({
+    start: bufferedStart,
+    end: bufferedEnd,
+  });
+
+  useEffect(() => {
+    rangeRef.current = { start: bufferedStart, end: bufferedEnd };
+  }, [bufferedStart, bufferedEnd]);
+
   // 再生速度の自動適用
   useEffect(() => {
     if (videoRef.current) {
@@ -60,48 +70,57 @@ export default function ClipPlayer({
     }
   }, [seekToTime]);
 
-  // 厳密なループ監視 (終了時間超えのみ巻き戻し)
+  // ループ位置チェック共通ロジック
+  const checkAndLoop = () => {
+    const v = videoRef.current;
+    const { start, end } = rangeRef.current;
+
+    if (v && !v.paused && start !== null && end !== null) {
+      if (onTimeUpdate) onTimeUpdate(v.currentTime);
+
+      // 終了時間を超えた場合、確定で開始位置へ巻き戻す
+      if (!isCoolingDownRef.current && v.currentTime >= end) {
+        isCoolingDownRef.current = true;
+        v.currentTime = start;
+        if (v.paused) {
+          void v.play().catch(() => {});
+        }
+        setTimeout(() => {
+          isCoolingDownRef.current = false;
+        }, 300);
+      }
+    }
+  };
+
+  // 1. 高頻度フレーム監視 (requestAnimationFrame)
   useEffect(() => {
     let animId: number;
 
-    const checkLoop = () => {
-      const v = videoRef.current;
-      if (v && !v.paused && bufferedStart !== null && bufferedEnd !== null) {
-        if (onTimeUpdate) onTimeUpdate(v.currentTime);
-
-        // クールダウン中でなく、終了時間を超えた場合のみ巻き戻す
-        if (!isCoolingDownRef.current && v.currentTime >= bufferedEnd) {
-          isCoolingDownRef.current = true;
-          v.currentTime = bufferedStart;
-          if (v.paused) {
-            void v.play().catch(() => {});
-          }
-          setTimeout(() => {
-            isCoolingDownRef.current = false;
-          }, 300);
-        }
-      }
-      animId = requestAnimationFrame(checkLoop);
+    const loop = () => {
+      checkAndLoop();
+      animId = requestAnimationFrame(loop);
     };
 
-    animId = requestAnimationFrame(checkLoop);
+    animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [bufferedStart, bufferedEnd, onTimeUpdate]);
+  }, []);
 
   const togglePlay = () => {
     const v = videoRef.current;
+    const { start, end } = rangeRef.current;
     if (!v) return;
+
     if (isPlaying) {
       v.pause();
       setIsPlaying(false);
     } else {
       // 指定範囲外にいる場合は開始位置へ移動してから再生
       if (
-        bufferedStart !== null &&
-        bufferedEnd !== null &&
-        (v.currentTime >= bufferedEnd || v.currentTime < bufferedStart - 1.0)
+        start !== null &&
+        end !== null &&
+        (v.currentTime >= end || v.currentTime < start - 1.0)
       ) {
-        v.currentTime = bufferedStart;
+        v.currentTime = start;
       }
       void v.play().catch(() => {});
       setIsPlaying(true);
@@ -118,6 +137,7 @@ export default function ClipPlayer({
         src={src}
         playsInline
         preload="auto"
+        onTimeUpdate={checkAndLoop} // 2. 動画標準イベントによる二重監視
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full aspect-video object-contain pointer-events-none"
