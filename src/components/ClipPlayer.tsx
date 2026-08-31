@@ -21,8 +21,10 @@ export default function ClipPlayer({
 }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isTimeOutOfBounds, setIsTimeOutOfBounds] = useState(false);
   const isCoolingDownRef = useRef(false);
 
+  // 文頭の切れ防止バッファ (0.3秒前から再生開始)
   const bufferedStart = segmentStart !== null ? Math.max(0, segmentStart - 0.3) : null;
   const bufferedEnd = segmentEnd !== null ? segmentEnd + 0.1 : null;
 
@@ -33,66 +35,79 @@ export default function ClipPlayer({
 
   useEffect(() => {
     rangeRef.current = { start: bufferedStart, end: bufferedEnd };
-    console.log("📍 [Range Update]", { bufferedStart, bufferedEnd });
   }, [bufferedStart, bufferedEnd]);
 
-  const seekToSegmentStart = (reason: string) => {
+  // 安全なシーク処理（動画の総再生時間を超えないようガード）
+  const safeSeek = (targetTime: number) => {
     const v = videoRef.current;
-    const start = rangeRef.current.start;
-    if (v && start !== null) {
-      console.log(`🚨 【SEEK TRIGGERED】理由: ${reason} | 現在地: ${v.currentTime.toFixed(3)}s ➔ 移動先: ${start.toFixed(3)}s`);
-      isCoolingDownRef.current = true;
-      v.currentTime = start;
-      setTimeout(() => {
-        isCoolingDownRef.current = false;
-      }, 500);
+    if (!v) return;
+
+    const duration = v.duration;
+    // メタデータ読み込み前、または動画長さを超えている場合の安全ガード
+    if (isNaN(duration) || duration <= 0) return;
+
+    if (targetTime >= duration) {
+      setIsTimeOutOfBounds(true);
+      console.warn(`⚠️ [ClipPlayer] 指定時間(${targetTime.toFixed(1)}s)が動画長さ(${duration.toFixed(1)}s)を超えています。`);
+      return;
     }
+
+    setIsTimeOutOfBounds(false);
+    isCoolingDownRef.current = true;
+    v.currentTime = targetTime;
+    setTimeout(() => {
+      isCoolingDownRef.current = false;
+    }, 500);
   };
 
+  // 再生速度の自動適用
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.playbackRate = playbackSpeed;
     }
   }, [playbackSpeed, src]);
 
+  // セグメント切り替え時のシーク
   useEffect(() => {
     if (bufferedStart !== null && videoRef.current) {
-      seekToSegmentStart("segmentStart変更");
+      safeSeek(bufferedStart);
       void videoRef.current.play().catch(() => {});
       setIsPlaying(true);
     }
   }, [segmentStart]);
 
+  // 特定時間のシーク対応
   useEffect(() => {
     if (seekToTime !== undefined && seekToTime !== null && videoRef.current) {
-      isCoolingDownRef.current = true;
-      videoRef.current.currentTime = Math.max(0, seekToTime - 0.3);
+      safeSeek(Math.max(0, seekToTime - 0.3));
       void videoRef.current.play().catch(() => {});
       setIsPlaying(true);
-      setTimeout(() => {
-        isCoolingDownRef.current = false;
-      }, 500);
     }
   }, [seekToTime]);
 
   const handleLoadedMetadata = () => {
-    console.log("🎬 [Loaded Metadata]", videoRef.current?.duration);
-    seekToSegmentStart("メタデータ読み込み完了");
+    if (bufferedStart !== null) {
+      safeSeek(bufferedStart);
+    }
   };
 
+  // 厳密なループチェック (安全ガード付き)
   const checkAndLoop = () => {
     const v = videoRef.current;
     const { start, end } = rangeRef.current;
 
-    if (v && !v.paused && start !== null && end !== null) {
+    if (v && !v.paused && start !== null && end !== null && !isCoolingDownRef.current) {
       if (onTimeUpdate) onTimeUpdate(v.currentTime);
 
-      if (!isCoolingDownRef.current) {
-        if (v.currentTime >= end) {
-          seekToSegmentStart("終了時間超過(124.3s超え)");
-        } else if (v.currentTime < start - 0.5) {
-          seekToSegmentStart(`開始位置より手前(現在地:${v.currentTime.toFixed(2)}s < 開始:${(start-0.5).toFixed(2)}s)`);
-        }
+      const duration = v.duration;
+      // 動画の長さを超えているタイムスタンプの場合はループ判定を行わない
+      if (!isNaN(duration) && start >= duration) {
+        return;
+      }
+
+      // 終了時間を超えたら巻き戻す
+      if (v.currentTime >= end) {
+        safeSeek(start);
       }
     }
   };
@@ -119,9 +134,11 @@ export default function ClipPlayer({
       if (
         start !== null &&
         end !== null &&
+        v.duration &&
+        start < v.duration &&
         (v.currentTime >= end || v.currentTime < start - 0.5)
       ) {
-        seekToSegmentStart("再生ボタンタップ時の範囲外検出");
+        safeSeek(start);
       }
       void v.play().catch(() => {});
       setIsPlaying(true);
@@ -150,6 +167,13 @@ export default function ClipPlayer({
           <div className="w-12 h-12 rounded-full bg-cyan-500/80 text-black flex items-center justify-center text-xl font-black shadow-lg shadow-cyan-500/50 animate-pulse">
             ▶
           </div>
+        </div>
+      )}
+
+      {/* タイムスタンプ不整合警告表示 */}
+      {isTimeOutOfBounds && (
+        <div className="absolute bottom-2 left-2 bg-red-950/90 border border-red-500 text-red-200 text-[10px] font-mono px-2 py-1 rounded shadow">
+          ⚠️ 字幕時間({segmentStart?.toFixed(1)}s)が動画長さ({videoRef.current?.duration.toFixed(1)}s)を超えています
         </div>
       )}
 
