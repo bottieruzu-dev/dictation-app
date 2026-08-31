@@ -142,169 +142,6 @@ pause
 <svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
 </file>
 
-<file path="src/app/monsters/page.tsx">
-"use client";
-
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-
-interface Monster {
-  id: number;
-  name: string;
-  name_en: string;
-  rarity: number;
-  element: string;
-  quote_en: string;
-  quote_ja: string;
-  madness_episode: string;
-  image_url: string;
-  stat_int: number;
-  stat_ear: number;
-  stat_voc: number;
-  stat_foc: number;
-  stat_luk: number;
-  stat_gut: number;
-  user_monsters?: {
-    luck: number;
-    total_obtained: number;
-  }[];
-}
-
-export default function MonstersPage() {
-  const [monsters, setMonsters] = useState<Monster[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedMonster, setSelectedMonster] = useState<Monster | null>(null);
-
-  const supabase = createClient();
-
-  useEffect(() => {
-    async function fetchMonsters() {
-      setLoading(true);
-
-      const { data: mData } = await supabase
-        .from("monsters")
-        .select("*, user_monsters(luck, total_obtained)")
-        .order("rarity", { ascending: false });
-
-      if (mData) setMonsters(mData as Monster[]);
-      setLoading(false);
-    }
-
-    void fetchMonsters();
-  }, [supabase]);
-
-  return (
-    <main className="min-h-screen bg-gray-950 text-white py-8">
-      <div className="max-w-4xl mx-auto px-4 space-y-6">
-        
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between border-b border-gray-800 pb-4">
-          <div>
-            <h1 className="text-2xl font-black">📖 モンスター図鑑</h1>
-            <p className="text-xs text-gray-400 mt-1">
-              収集したモンスターのステータスとフレーバーテキストを確認できます
-            </p>
-          </div>
-          <Link
-            href="/"
-            className="px-3 py-1.5 bg-gray-800 text-gray-200 font-bold text-xs rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            ← ダッシュボード
-          </Link>
-        </div>
-
-        {/* 図鑑グリッド */}
-        {loading ? (
-          <p className="text-xs text-gray-500 text-center py-12">図鑑データを読み込み中...</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {monsters.map((m) => {
-              const isOwned = m.user_monsters && m.user_monsters.length > 0;
-              const luck = isOwned ? m.user_monsters![0].luck : 0;
-
-              return (
-                <div
-                  key={m.id}
-                  onClick={() => setSelectedMonster(m)}
-                  className={`bg-gray-900 border rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02] ${
-                    isOwned ? "border-gray-700 shadow-lg" : "border-gray-800 opacity-40 grayscale"
-                  }`}
-                >
-                  <div className="aspect-square relative bg-black">
-                    <img src={m.image_url} alt={m.name} className="w-full h-full object-cover" />
-                    <div className="absolute top-2 left-2 bg-black/60 backdrop-blur px-2 py-0.5 rounded text-[10px] font-bold text-amber-400">
-                      {"★".repeat(m.rarity)}
-                    </div>
-                    {isOwned && (
-                      <div className="absolute bottom-2 right-2 bg-blue-600 text-white font-mono text-[10px] font-bold px-1.5 py-0.5 rounded">
-                        ☘️ {luck}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-3 space-y-1">
-                    <h3 className="text-xs font-bold truncate">{isOwned ? m.name : "？？？？"}</h3>
-                    <p className="text-[10px] text-gray-500 font-mono truncate">{m.element.toUpperCase()}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 詳細表示モーダル */}
-        {selectedMonster && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-md w-full p-6 text-white space-y-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-xs text-amber-400 font-bold">
-                    {"★".repeat(selectedMonster.rarity)}
-                  </span>
-                  <h2 className="text-xl font-black">{selectedMonster.name}</h2>
-                  <p className="text-xs text-gray-400 font-mono">{selectedMonster.name_en}</p>
-                </div>
-                <button
-                  onClick={() => setSelectedMonster(null)}
-                  className="text-gray-400 hover:text-white text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <img
-                src={selectedMonster.image_url}
-                alt={selectedMonster.name}
-                className="w-full h-48 object-cover rounded-xl border border-gray-800"
-              />
-
-              <div className="bg-gray-950 p-3 rounded-xl space-y-2 text-xs">
-                <p className="text-cyan-300 italic">"{selectedMonster.quote_ja}"</p>
-                <p className="text-gray-400 text-[11px] leading-relaxed">
-                  {selectedMonster.madness_episode}
-                </p>
-              </div>
-
-              {/* ステータス表 */}
-              <div className="grid grid-cols-3 gap-2 text-xs font-mono bg-gray-950 p-3 rounded-xl border border-gray-800">
-                <div>知力 (INT): <span className="font-bold text-blue-400">{selectedMonster.stat_int}</span></div>
-                <div>聴力 (EAR): <span className="font-bold text-green-400">{selectedMonster.stat_ear}</span></div>
-                <div>語彙 (VOC): <span className="font-bold text-purple-400">{selectedMonster.stat_voc}</span></div>
-                <div>集中 (FOC): <span className="font-bold text-amber-400">{selectedMonster.stat_foc}</span></div>
-                <div>幸運 (LUK): <span className="font-bold text-yellow-400">{selectedMonster.stat_luk}</span></div>
-                <div>胆力 (GUT): <span className="font-bold text-red-400">{selectedMonster.stat_gut}</span></div>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </div>
-    </main>
-  );
-}
-</file>
-
 <file path="src/app/verify/page.tsx">
 "use client";
 
@@ -1211,276 +1048,6 @@ if __name__ == "__main__":
 }
 </file>
 
-<file path="src/app/clips/[id]/prepare/page.tsx">
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-
-interface Monster {
-  id: number;
-  name: string;
-  name_en: string;
-  rarity: number;
-  element: string;
-  image_url: string;
-  stat_int: number;
-  stat_ear: number;
-  stat_voc: number;
-  stat_foc: number;
-  stat_luk: number;
-  stat_gut: number;
-  user_monsters?: {
-    luck: number;
-  }[];
-}
-
-interface Clip {
-  id: string;
-  label: string | null;
-  difficulty_score?: number | null;
-  difficulty_tier?: string | null;
-  effective_wpm?: number | null;
-  monsters?: Monster | null;
-}
-
-export default function PreparePage() {
-  const params = useParams();
-  const router = useRouter();
-  const id = params?.id as string;
-
-  const [clip, setClip] = useState<Clip | null>(null);
-  const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
-  const [loading, setLoading] = useState(true);
-
-  const supabase = createClient();
-
-  const getLuckMultiplier = (luck: number) => {
-    if (luck >= 99) return 1.30;
-    if (luck >= 90) return 1.22;
-    if (luck >= 60) return 1.15;
-    if (luck >= 30) return 1.08;
-    if (luck >= 10) return 1.03;
-    return 1.0;
-  };
-
-  useEffect(() => {
-    if (!id) return;
-
-    async function fetchPrepareData() {
-      setLoading(true);
-
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // 1. クリップ情報・ドロップ対象モンスターの取得
-      const { data: clipData } = await supabase
-        .from("clips")
-        .select("*, monsters(*)")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (clipData) {
-        setClip(clipData as Clip);
-      }
-
-      // 2. 現在のパーティ編成3体を取得
-      if (user) {
-        const { data: mData } = await supabase
-          .from("user_monsters")
-          .select("monsters(*), luck")
-          .eq("owner_id", user.id);
-
-        if (mData) {
-          const list: Monster[] = mData.map((item: any) => ({
-            ...item.monsters,
-            user_monsters: [{ luck: item.luck }],
-          }));
-
-          const { data: pData } = await supabase
-            .from("party")
-            .select("slot, monster_id")
-            .eq("owner_id", user.id)
-            .order("slot", { ascending: true });
-
-          if (pData) {
-            const slots: (Monster | null)[] = [null, null, null];
-            pData.forEach((p) => {
-              const found = list.find((m) => m.id === p.monster_id);
-              if (found && p.slot >= 1 && p.slot <= 3) {
-                slots[p.slot - 1] = found;
-              }
-            });
-            setPartySlots(slots);
-          }
-        }
-      }
-
-      setLoading(false);
-    }
-
-    void fetchPrepareData();
-  }, [id, supabase]);
-
-  const calculateTotalStats = () => {
-    let intSum = 0, earSum = 0, vocSum = 0, focSum = 0, lukSum = 0, gutSum = 0;
-
-    partySlots.forEach((m) => {
-      if (!m) return;
-      const luck = m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 1;
-      const mult = getLuckMultiplier(luck);
-
-      intSum += Math.round(m.stat_int * mult);
-      earSum += Math.round(m.stat_ear * mult);
-      vocSum += Math.round(m.stat_voc * mult);
-      focSum += Math.round(m.stat_foc * mult);
-      lukSum += Math.round(m.stat_luk * mult);
-      gutSum += Math.round(m.stat_gut * mult);
-    });
-
-    return {
-      int: intSum,
-      ear: earSum,
-      voc: vocSum,
-      foc: focSum,
-      luk: lukSum,
-      gut: gutSum,
-      xpMult: Math.min(2.5, 1.0 + intSum * 0.0008).toFixed(2),
-      earDropBonus: Math.min(20.0, earSum * 0.006).toFixed(1),
-    };
-  };
-
-  const stats = calculateTotalStats();
-
-  if (loading) {
-    return <div className="min-h-screen bg-gray-950 text-white p-8 text-center text-sm font-mono">出撃データを確認中...</div>;
-  }
-
-  const targetMon = clip?.monsters;
-
-  return (
-    <main className="min-h-screen bg-gray-950 text-white py-8">
-      <div className="max-w-md mx-auto px-4 space-y-5">
-        
-        {/* 上部ヘッダー */}
-        <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-          <Link href="/" className="text-xs text-gray-400 hover:text-white font-bold">
-            ← キャンセル
-          </Link>
-          <span className="text-xs font-black tracking-widest text-cyan-400 uppercase font-mono">
-            STAGE SELECT
-          </span>
-          <div className="w-12"></div>
-        </div>
-
-        {/* クエスト情報カード */}
-        <div className="bg-gradient-to-b from-gray-900 to-gray-950 border-2 border-indigo-600 rounded-2xl p-4 shadow-xl space-y-3 relative overflow-hidden">
-          <div className="flex justify-between items-start border-b border-gray-800 pb-2">
-            <div>
-              <span className="bg-red-600 text-white font-black px-2.5 py-0.5 rounded text-[10px] uppercase tracking-wider">
-                {clip?.difficulty_tier || '中級'} (SCORE: {clip?.difficulty_score ?? 0})
-              </span>
-              <h2 className="text-base font-black text-white mt-1.5 line-clamp-1">
-                {clip?.label || 'ディクテーションクエスト'}
-              </h2>
-            </div>
-          </div>
-
-          {/* ドロップターゲット枠 */}
-          {targetMon ? (
-            <div className="bg-gray-900 p-2.5 rounded-xl border border-gray-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <img src={targetMon.image_url} alt={targetMon.name} className="w-12 h-12 object-cover rounded-lg border border-amber-500/50 shadow" />
-                <div>
-                  <div className="text-[10px] text-amber-400 font-bold">ドロップターゲット {"★".repeat(targetMon.rarity)}</div>
-                  <div className="text-xs font-black text-white">{targetMon.name}</div>
-                </div>
-              </div>
-              <div className="text-right text-[10px] text-cyan-300 font-mono font-bold">
-                ☘️ 運極周回可
-              </div>
-            </div>
-          ) : (
-            <div className="text-xs text-gray-500 text-center py-2 font-mono">ターゲットモンスター未割り当て</div>
-          )}
-        </div>
-
-        {/* 出撃デッキ表示 */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3 shadow-lg">
-          <div className="flex justify-between items-center border-b border-gray-800 pb-2">
-            <span className="text-xs font-black text-indigo-300 font-mono">
-              ⚔️ 出撃デッキ (スロット 1〜3)
-            </span>
-            {/* ★ クリップIDを引き継いでパーティ画面へ遷移 */}
-            <Link
-              href={`/party?fromClip=${id}`}
-              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg transition-colors"
-            >
-              編成を変更
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {[0, 1, 2].map((slotIdx) => {
-              const m = partySlots[slotIdx];
-              const luck = m && m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 0;
-
-              return (
-                <div
-                  key={slotIdx}
-                  className="bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-center space-y-1.5 flex flex-col justify-between"
-                >
-                  <div className="text-[9px] text-gray-500 font-mono font-bold">
-                    #{slotIdx + 1} {slotIdx === 0 && "👑"}
-                  </div>
-
-                  {m ? (
-                    <>
-                      <img src={m.image_url} alt={m.name} className="w-14 h-14 object-cover rounded-lg mx-auto border border-indigo-500/50" />
-                      <div>
-                        <div className="text-[9px] text-amber-400">{"★".repeat(m.rarity)}</div>
-                        <div className="text-[11px] font-bold truncate">{m.name}</div>
-                        <div className="text-[9px] text-cyan-300 font-mono">☘️ {luck}</div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="py-6 text-gray-700 text-xs font-bold">未設定</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ステータスサマリー */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3.5 text-xs font-mono grid grid-cols-2 gap-2 text-gray-300">
-          <div className="bg-gray-950 p-2 rounded-lg border border-gray-800">
-            <span className="text-gray-500 block text-[9px]">知力 (INT)</span>
-            <span className="text-sm font-black text-blue-400">{stats.int}</span>
-            <span className="text-[9px] text-gray-400 block">XP: {stats.xpMult}倍</span>
-          </div>
-          <div className="bg-gray-950 p-2 rounded-lg border border-gray-800">
-            <span className="text-gray-500 block text-[9px]">聴力 (EAR)</span>
-            <span className="text-sm font-black text-green-400">{stats.ear}</span>
-            <span className="text-[9px] text-gray-400 block">ドロップ: +{stats.earDropBonus}pt</span>
-          </div>
-        </div>
-
-        {/* 出撃ボタン */}
-        <button
-          onClick={() => router.push(`/clips/${id}`)}
-          className="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:opacity-95 text-white font-black text-lg rounded-2xl shadow-2xl tracking-widest uppercase border border-cyan-400/30 transition-all flex items-center justify-center gap-2 animate-pulse"
-        >
-          <span>🔥 出 撃 （学習スタート）</span>
-        </button>
-
-      </div>
-    </main>
-  );
-}
-</file>
-
 <file path="src/components/GachaModal.tsx">
 "use client";
 
@@ -2355,6 +1922,239 @@ export default function HistoryPage() {
 }
 </file>
 
+<file path="src/app/monsters/page.tsx">
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  element: string;
+  quote_en: string;
+  quote_ja: string;
+  madness_episode: string;
+  image_url: string;
+  stat_int: number;
+  stat_ear: number;
+  stat_voc: number;
+  stat_foc: number;
+  stat_luk: number;
+  stat_gut: number;
+  user_monsters?: {
+    luck: number;
+    total_obtained: number;
+  }[];
+}
+
+export default function MonstersPage() {
+  const [monsters, setMonsters] = useState<Monster[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonster, setSelectedMonster] = useState<Monster | null>(null);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function fetchMonsters() {
+      setLoading(true);
+
+      const { data: mData } = await supabase
+        .from("monsters")
+        .select("*, user_monsters(luck, total_obtained)")
+        .order("rarity", { ascending: false });
+
+      if (mData) setMonsters(mData as Monster[]);
+      setLoading(false);
+    }
+
+    void fetchMonsters();
+  }, [supabase]);
+
+  // 画像読み込みエラー時のフォールバック処理
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    e.currentTarget.src = "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=400";
+  };
+
+  return (
+    <main className="min-h-screen bg-[#0d0a08] text-[#2b2118] font-serif py-8 px-2 sm:px-6 relative selection:bg-amber-800 selection:text-amber-100">
+      
+      {/* 背景：アンティーク木目風テクスチャ装飾 */}
+      <div className="max-w-5xl mx-auto space-y-6 relative">
+        
+        {/* ヘッダー領域 */}
+        <div className="flex items-center justify-between border-b-2 border-[#3d2e1e] pb-4 px-2">
+          <div>
+            <span className="text-[10px] font-mono tracking-widest text-amber-600 uppercase block font-bold">
+              ENCYCLOPEDIA OF GREAT MINDS
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#e6c896] drop-shadow-md flex items-center gap-2 font-serif">
+              <span>📖</span> 偉人英傑 魔導図鑑
+            </h1>
+          </div>
+          <Link
+            href="/"
+            className="px-4 py-2 bg-[#211811] hover:bg-[#33261a] border border-[#54412c] text-[#e6c896] font-bold text-xs rounded-xl shadow-lg transition-all font-sans"
+          >
+            ◀ ダッシュボードに戻る
+          </Link>
+        </div>
+
+        {/* ================= 本の本体（羊皮紙の開かれた古書デザイン） ================= */}
+        <div className="bg-[#f4e8c1] border-8 border-[#3d2e1e] rounded-3xl shadow-2xl p-4 sm:p-8 relative overflow-hidden">
+          
+          {/* 本の背表紙・中央の折り目グラデーション */}
+          <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-12 bg-gradient-to-r from-transparent via-[#d6c49b]/50 to-transparent pointer-events-none hidden md:block" />
+          
+          {/* 羊皮紙の角の金箔装飾コーナー */}
+          <div className="absolute top-2 left-2 text-[#8c6d3f] text-xs font-serif pointer-events-none">✦</div>
+          <div className="absolute top-2 right-2 text-[#8c6d3f] text-xs font-serif pointer-events-none">✦</div>
+          <div className="absolute bottom-2 left-2 text-[#8c6d3f] text-xs font-serif pointer-events-none">✦</div>
+          <div className="absolute bottom-2 right-2 text-[#8c6d3f] text-xs font-serif pointer-events-none">✦</div>
+
+          <div className="text-center pb-6 border-b border-[#a89267]/40 mb-6 space-y-1">
+            <p className="text-xs text-[#5c4a30] font-bold tracking-widest font-mono uppercase">
+              - RECORD OF HEROIC SOULS -
+            </p>
+            <p className="text-xs text-[#705c3d] italic">
+              刻まれた歴史の英傑たち。解放された偉人はその偉業と叡智を現す。
+            </p>
+          </div>
+
+          {loading ? (
+            <p className="text-xs text-[#705c3d] font-mono text-center py-16 animate-pulse">
+              羊皮紙の記録を解読中...
+            </p>
+          ) : (
+            /* モンスター挿絵グリッド */
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6 relative z-10">
+              {monsters.map((m) => {
+                const isOwned = m.user_monsters && m.user_monsters.length > 0;
+                const luck = isOwned ? m.user_monsters![0].luck : 0;
+
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => setSelectedMonster(m)}
+                    className={`border-2 rounded-xl overflow-hidden cursor-pointer transition-all duration-200 relative group flex flex-col justify-between ${
+                      isOwned
+                        ? "bg-[#e8d7b0] border-[#8c6d3f] shadow-md hover:shadow-xl hover:-translate-y-1 hover:border-[#b8860b]"
+                        : "bg-[#d1c29b]/40 border-[#a89267]/50 opacity-60 hover:opacity-80"
+                    }`}
+                  >
+                    {/* カード枠内イラスト */}
+                    <div className="aspect-square relative bg-[#1f1811] overflow-hidden border-b border-[#8c6d3f]/40">
+                      <img
+                        src={m.image_url}
+                        alt=""
+                        onError={handleImageError}
+                        className={`w-full h-full object-cover object-top transition-transform duration-300 ${
+                          isOwned ? "group-hover:scale-105" : "grayscale contrast-125 sepia opacity-40"
+                        }`}
+                      />
+                      
+                      {/* レアリティ星表示 */}
+                      <div className="absolute top-1.5 left-1.5 bg-[#1f1811]/80 backdrop-blur px-2 py-0.5 rounded-md text-[9px] font-bold text-amber-400 border border-[#8c6d3f]/50">
+                        {"★".repeat(m.rarity)}
+                      </div>
+
+                      {/* ラック表示 */}
+                      {isOwned && (
+                        <div className="absolute bottom-1.5 right-1.5 bg-[#211811] text-[#e6c896] font-mono text-[9px] font-bold px-2 py-0.5 rounded border border-[#8c6d3f]">
+                          ☘️ {luck}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* モンスター名・属性 */}
+                    <div className="p-2.5 text-center space-y-0.5 bg-[#f4e8c1]/90">
+                      <h3 className="text-xs font-black truncate text-[#2b2118]">
+                        {isOwned ? m.name : "？？？？？？"}
+                      </h3>
+                      <p className="text-[9px] text-[#705c3d] font-mono uppercase font-bold tracking-wider">
+                        {m.element}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+        </div>
+
+        {/* ================= モンスター詳細（羊皮紙の羊皮手記モーダル） ================= */}
+        {selectedMonster && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+            <div className="bg-[#f4e8c1] border-4 border-[#3d2e1e] rounded-3xl max-w-md w-full p-6 text-[#2b2118] space-y-4 shadow-2xl relative font-serif">
+              
+              <div className="flex justify-between items-start border-b border-[#a89267]/50 pb-2">
+                <div>
+                  <span className="text-xs text-amber-700 font-bold tracking-widest">
+                    {"★".repeat(selectedMonster.rarity)}
+                  </span>
+                  <h2 className="text-lg font-black text-[#1a130d]">{selectedMonster.name}</h2>
+                  <p className="text-[11px] text-[#705c3d] font-mono">{selectedMonster.name_en}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedMonster(null)}
+                  className="text-[#705c3d] hover:text-[#1a130d] text-base font-bold bg-[#e8d7b0] border border-[#a89267] w-7 h-7 rounded-full flex items-center justify-center shadow"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* イラスト枠（正方形＋上部優先表示に修正） */}
+              <div className="relative aspect-square max-h-64 mx-auto bg-[#1f1811] rounded-2xl overflow-hidden border-2 border-[#8c6d3f] shadow-inner">
+                <img
+                  src={selectedMonster.image_url}
+                  alt=""
+                  onError={handleImageError}
+                  className="w-full h-full object-cover object-top"
+                />
+              </div>
+
+              {/* 名言・狂気のエピソード */}
+              <div className="bg-[#e8d7b0]/80 p-3.5 rounded-2xl border border-[#a89267]/60 space-y-2 text-xs">
+                {selectedMonster.quote_ja && (
+                  <p className="text-[#8c4800] font-black italic border-b border-[#a89267]/30 pb-1.5">
+                    "{selectedMonster.quote_ja}"
+                  </p>
+                )}
+                <p className="text-[#423321] text-[11px] leading-relaxed">
+                  {selectedMonster.madness_episode}
+                </p>
+              </div>
+
+              {/* ステータスグリッド */}
+              <div className="grid grid-cols-3 gap-2 text-xs font-mono bg-[#211811] text-[#e6c896] p-3 rounded-2xl border border-[#8c6d3f]">
+                <div>知力: <span className="font-bold text-cyan-400">{selectedMonster.stat_int}</span></div>
+                <div>聴力: <span className="font-bold text-emerald-400">{selectedMonster.stat_ear}</span></div>
+                <div>語彙: <span className="font-bold text-purple-400">{selectedMonster.stat_voc}</span></div>
+                <div>集中: <span className="font-bold text-amber-400">{selectedMonster.stat_foc}</span></div>
+                <div>幸運: <span className="font-bold text-yellow-400">{selectedMonster.stat_luk}</span></div>
+                <div>胆力: <span className="font-bold text-red-400">{selectedMonster.stat_gut}</span></div>
+              </div>
+
+              <button
+                onClick={() => setSelectedMonster(null)}
+                className="w-full py-2.5 bg-[#3d2e1e] hover:bg-[#54412c] text-[#e6c896] font-bold text-xs rounded-xl shadow-lg font-sans transition-colors"
+              >
+                手記を閉じる
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </main>
+  );
+}
+</file>
+
 <file path="src/app/party/page.tsx">
 "use client";
 
@@ -3212,672 +3012,7 @@ export default function TranscriptView({ videoId }: Props) {
 }
 </file>
 
-<file path="src/app/page.tsx">
-"use client";
-
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import GachaModal from "@/components/GachaModal";
-
-interface Video {
-  id: string;
-  youtube_id: string;
-  title: string | null;
-  status: string;
-  created_at: string;
-}
-
-interface Monster {
-  id: number;
-  name: string;
-  rarity: number;
-  image_url: string;
-}
-
-interface Clip {
-  id: string;
-  label: string | null;
-  tags: string[] | null;
-  status: string;
-  video_id: string;
-  created_at: string;
-  difficulty_score?: number | null;
-  difficulty_tier?: string | null;
-  effective_wpm?: number | null;
-  monster_id?: number | null;
-  monsters?: Monster | null;
-  user_luck?: number;
-  videos?: {
-    youtube_id: string;
-    title: string;
-  };
-}
-
-export default function DashboardPage() {
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const [activeTab, setActiveTab] = useState<"clips" | "videos">("clips");
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
-
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [clips, setClips] = useState<Clip[]>([]);
-  const [totalStorageBytes, setTotalStorageBytes] = useState(0);
-  const [orbCount, setOrbCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-
-  const [editingClip, setEditingClip] = useState<Clip | null>(null);
-  const [editLabel, setEditLabel] = useState("");
-  const [editTags, setEditTags] = useState("");
-
-  const [isGachaOpen, setIsGachaOpen] = useState(false);
-
-  const supabase = createClient();
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSignedIn(!!data.session);
-    });
-  }, [supabase]);
-
-  const fetchData = async () => {
-    if (!signedIn) return;
-    setLoading(true);
-
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const { data: orbRes, error: orbErr } = await supabase.rpc("ensure_initial_orbs");
-    if (!orbErr && orbRes !== null) {
-      setOrbCount(orbRes);
-    }
-
-    const { data: vData } = await supabase
-      .from("videos")
-      .select("id, youtube_id, title, status, created_at")
-      .order("created_at", { ascending: false });
-
-    if (vData) setVideos(vData);
-
-    let luckMap: Record<number, number> = {};
-    if (user) {
-      const { data: uMonData } = await supabase
-        .from("user_monsters")
-        .select("monster_id, luck")
-        .eq("owner_id", user.id);
-
-      if (uMonData) {
-        uMonData.forEach((row) => {
-          luckMap[row.monster_id] = row.luck;
-        });
-      }
-    }
-
-    const { data: cData } = await supabase
-      .from("clips")
-      .select("*, videos(youtube_id, title), monsters(*)")
-      .order("created_at", { ascending: false });
-
-    if (cData) {
-      const formattedClips: Clip[] = cData.map((c: any) => ({
-        ...c,
-        user_luck: c.monster_id ? (luckMap[c.monster_id] ?? 0) : 0,
-      }));
-      setClips(formattedClips);
-    }
-
-    const { data: assetData } = await supabase
-      .from("clip_assets")
-      .select("video_bytes");
-
-    if (assetData) {
-      const bytes = assetData.reduce((acc, row) => acc + (row.video_bytes || 0), 0);
-      setTotalStorageBytes(bytes);
-    }
-
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    void fetchData();
-  }, [signedIn]);
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setAuthError(error.message);
-    else setSignedIn(true);
-  };
-
-  const extractYoutubeId = (url: string) => {
-    const match = url.match(/(?:v=|\/embed\/|\/1080\/|\/shorts\/|youtu\.be\/|\/v\/)([^#&?]*)/);
-    return match && match[1].length === 11 ? match[1] : null;
-  };
-
-  const handleAddVideo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitMessage(null);
-
-    const ytId = extractYoutubeId(youtubeUrl);
-    if (!ytId) {
-      setSubmitMessage("🚨 有効なYouTube URLを入力してください。");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("ログインしていません。");
-
-      const { data: video, error: vErr } = await supabase
-        .from("videos")
-        .insert({
-          owner_id: user.id,
-          youtube_id: ytId,
-          title: "（取得中...）",
-          status: "downloading",
-        })
-        .select("id")
-        .single();
-
-      if (vErr) throw vErr;
-
-      const { error: jErr } = await supabase.from("ingest_jobs").insert({
-        owner_id: user.id,
-        video_id: video.id,
-        type: "download",
-        lane: "gpu",
-        priority: 100,
-        payload: { youtube_id: ytId },
-      });
-
-      if (jErr) throw jErr;
-
-      setSubmitMessage("🎉 動画を追加しました！");
-      setYoutubeUrl("");
-      void fetchData();
-    } catch (err: any) {
-      setSubmitMessage(`🚨 エラー: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteClip = async (clipId: string) => {
-    if (!confirm("このクリップを削除しますか？")) return;
-    await supabase.from("clips").delete().eq("id", clipId);
-    void fetchData();
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingClip) return;
-    const tagArray = editTags.split(",").map((t) => t.trim()).filter(Boolean);
-
-    await supabase.from("clips").update({
-      label: editLabel,
-      tags: tagArray,
-    }).eq("id", editingClip.id);
-
-    setEditingClip(null);
-    void fetchData();
-  };
-
-  // 難易度に応じたネオンカラー・発光定義
-  const getTierStyle = (tier?: string | null) => {
-    switch (tier) {
-      case "初級":
-        return {
-          badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-emerald-500/20",
-          cardBorder: "border-emerald-500/40 hover:border-emerald-400 hover:shadow-emerald-500/20",
-        };
-      case "中級":
-        return {
-          badge: "bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-cyan-500/20",
-          cardBorder: "border-cyan-500/40 hover:border-cyan-400 hover:shadow-cyan-500/20",
-        };
-      case "上級":
-        return {
-          badge: "bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-amber-500/20",
-          cardBorder: "border-amber-500/40 hover:border-amber-400 hover:shadow-amber-500/20",
-        };
-      case "超上級":
-        return {
-          badge: "bg-purple-500/20 text-purple-400 border-purple-500/50 shadow-purple-500/20",
-          cardBorder: "border-purple-500/40 hover:border-purple-400 hover:shadow-purple-500/20",
-        };
-      case "超絶":
-        return {
-          badge: "bg-red-500/20 text-red-400 border-red-500/50 shadow-red-500/20 animate-pulse",
-          cardBorder: "border-red-500/50 hover:border-red-400 hover:shadow-red-500/30",
-        };
-      default:
-        return {
-          badge: "bg-slate-700/50 text-slate-300 border-slate-600",
-          cardBorder: "border-slate-800 hover:border-slate-700",
-        };
-    }
-  };
-
-  if (signedIn === false) {
-    return (
-      <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-16 p-6 space-y-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl text-white">
-        <h2 className="text-xl font-black text-center tracking-wide">PLAYER LOGIN</h2>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
-        <button className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white py-3 rounded-xl font-black text-sm shadow-lg transition-all">ログイン</button>
-        {authError && <p className="text-red-400 text-xs text-center font-mono">{authError}</p>}
-      </form>
-    );
-  }
-
-  const storageMb = (totalStorageBytes / (1024 * 1024)).toFixed(1);
-
-  const filteredClips = clips.filter((c) => {
-    const q = searchQuery.toLowerCase();
-    const labelMatch = (c.label || "").toLowerCase().includes(q);
-    const tagMatch = (c.tags || []).some((t) => t.toLowerCase().includes(q));
-    const tierMatch = (c.difficulty_tier || "").toLowerCase().includes(q);
-    const monsterMatch = (c.monsters?.name || "").toLowerCase().includes(q);
-    return labelMatch || tagMatch || tierMatch || monsterMatch;
-  });
-
-  const filteredVideos = videos.filter((v) =>
-    (v.title || "").toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans py-6 selection:bg-cyan-500 selection:text-black">
-      <div className="max-w-4xl mx-auto px-4 space-y-6">
-        
-        {/* ================= ソシャゲ風ステータスヘッダー ================= */}
-        <header className="bg-slate-900/90 border border-slate-800/80 backdrop-blur-md rounded-2xl p-4 shadow-2xl space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            
-            {/* アプリロゴ ＆ プレイヤー情報 */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-0.5 shadow-lg shadow-purple-500/20">
-                <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-xl font-black text-transparent bg-clip-text bg-gradient-to-br from-cyan-400 to-indigo-300">
-                  D
-                </div>
-              </div>
-              <div>
-                <h1 className="text-lg font-black tracking-wider text-white flex items-center gap-2">
-                  Dictation App
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-950 text-cyan-400 border border-cyan-800/50">Ver 2.0</span>
-                </h1>
-                <p className="text-[11px] text-slate-400 font-mono">ディクテーション × ソシャゲ周回</p>
-              </div>
-            </div>
-
-            {/* オーブ ＆ R2ストレージゲージ（ソーシャルゲームのパラメータ風） */}
-            <div className="flex items-center gap-3 self-end md:self-auto font-mono">
-              {/* オーブ数表示 */}
-              <div className="bg-gradient-to-r from-slate-950 to-slate-900 border border-cyan-500/40 px-4 py-2 rounded-xl shadow-lg flex items-center gap-2.5 relative overflow-hidden group">
-                <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="text-xl animate-pulse">💎</span>
-                <div>
-                  <div className="text-[9px] font-bold text-cyan-400/80 uppercase tracking-widest leading-none">ORB</div>
-                  <div className="text-base font-black text-cyan-300 leading-tight drop-shadow">{orbCount} <span className="text-xs font-normal">個</span></div>
-                </div>
-              </div>
-
-              {/* クラウド容量表示 */}
-              <div className="bg-slate-950 border border-slate-800 px-3.5 py-2 rounded-xl text-right">
-                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">R2 STORAGE</div>
-                <div className="text-xs font-bold text-indigo-400 leading-tight mt-0.5">{storageMb} <span className="text-[10px] text-slate-500">MB / 10 GB</span></div>
-              </div>
-            </div>
-          </div>
-
-          {/* ナビゲーションメタリックボタン群 */}
-          <nav className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
-            <Link
-              href="/party"
-              className="py-2.5 px-3 bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 hover:from-indigo-600 hover:to-indigo-700 active:translate-y-0.5 border border-indigo-400/30 text-white text-xs font-black rounded-xl shadow-lg shadow-indigo-950 transition-all flex items-center justify-center gap-1.5"
-            >
-              <span>⚔️</span> パーティ編成
-            </Link>
-
-            <button
-              onClick={() => setIsGachaOpen(true)}
-              className="py-2.5 px-3 bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-800 hover:from-purple-600 hover:to-indigo-700 active:translate-y-0.5 border border-purple-400/30 text-white text-xs font-black rounded-xl shadow-lg shadow-purple-950 transition-all flex items-center justify-center gap-1.5"
-            >
-              <span>🔮</span> 召喚 (ガチャ)
-            </button>
-
-            <Link
-              href="/monsters"
-              className="py-2.5 px-3 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 active:translate-y-0.5 border border-slate-700 text-slate-200 text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-            >
-              <span>📖</span> モンスター図鑑
-            </Link>
-
-            <Link
-              href="/history"
-              className="py-2.5 px-3 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 active:translate-y-0.5 border border-slate-700 text-slate-200 text-xs font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-            >
-              <span>📝</span> 間違いノート
-            </Link>
-          </nav>
-        </header>
-
-        {/* ================= YouTube追加フォーム ================= */}
-        <section className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3 shadow-xl backdrop-blur-sm">
-          <h2 className="text-xs font-extrabold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-            <span>📹</span> 新規YouTube動画を取り込む
-          </h2>
-          <form onSubmit={handleAddVideo} className="flex gap-2">
-            <input
-              type="text"
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono transition-colors"
-              required
-            />
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg shadow-cyan-950/50 disabled:opacity-40 transition-all whitespace-nowrap"
-            >
-              {isSubmitting ? "解析中..." : "動画をインジェスト"}
-            </button>
-          </form>
-          {submitMessage && (
-            <p className="text-xs font-mono text-cyan-300 bg-cyan-950/40 border border-cyan-900 p-2.5 rounded-xl animate-fadeIn">
-              {submitMessage}
-            </p>
-          )}
-        </section>
-
-        {/* ================= 検索バー ＆ メニュータブ ================= */}
-        <div className="space-y-3">
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 題名、タグ、難易度（初級、超絶等）、モンスター名で検索..."
-              className="w-full bg-slate-900/80 border border-slate-800 rounded-xl pl-4 pr-10 py-3 text-xs text-white placeholder-slate-500 shadow-inner focus:outline-none focus:border-indigo-500 transition-colors"
-            />
-          </div>
-
-          <div className="flex border-b border-slate-800">
-            <button
-              onClick={() => setActiveTab("clips")}
-              className={`flex-1 py-3 font-black text-xs text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === "clips"
-                  ? "border-cyan-400 text-cyan-400 bg-gradient-to-t from-cyan-950/30 to-transparent"
-                  : "border-transparent text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <span>✂️</span> 作成済みクエストクリップ ({filteredClips.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("videos")}
-              className={`flex-1 py-3 font-black text-xs text-center border-b-2 transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === "videos"
-                  ? "border-cyan-400 text-cyan-400 bg-gradient-to-t from-cyan-950/30 to-transparent"
-                  : "border-transparent text-slate-500 hover:text-slate-300"
-              }`}
-            >
-              <span>📹</span> 登録済み動画原本 ({filteredVideos.length})
-            </button>
-          </div>
-        </div>
-
-        {/* ================= クリップ一覧 (ソシャゲ・クエストカード化) ================= */}
-        {activeTab === "clips" && (
-          <section>
-            {loading ? (
-              <p className="text-xs text-slate-500 font-mono text-center py-12 animate-pulse">クエストデータをロード中...</p>
-            ) : filteredClips.length === 0 ? (
-              <div className="bg-slate-900/40 p-12 text-center border border-slate-800/80 rounded-2xl text-slate-500 text-xs font-mono">
-                該当するクリップが見つかりません。
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {filteredClips.map((clip) => {
-                  const ytId = clip.videos?.youtube_id;
-                  const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
-                  const mon = clip.monsters;
-                  const currentLuck = clip.user_luck ?? 0;
-                  const remainingLuck = Math.max(0, 99 - currentLuck);
-                  const isLuckMax = currentLuck >= 99;
-                  const style = getTierStyle(clip.difficulty_tier);
-
-                  return (
-                    <div
-                      key={clip.id}
-                      className={`bg-slate-900/80 border rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transition-all duration-200 ${style.cardBorder}`}
-                    >
-                      {/* クエストサムネイル ＆ 難易度ネオンバッジ */}
-                      <div className="aspect-video bg-black relative overflow-hidden group">
-                        {thumbUrl ? (
-                          <img
-                            src={thumbUrl}
-                            alt="Thumbnail"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-slate-950 flex items-center justify-center text-slate-700 font-mono text-xs">NO THUMBNAIL</div>
-                        )}
-
-                        {/* 難易度バッジ */}
-                        {clip.difficulty_tier && (
-                          <span
-                            className={`absolute top-2.5 left-2.5 px-3 py-1 rounded-full text-[10px] font-black font-mono border backdrop-blur-md shadow-lg ${style.badge}`}
-                          >
-                            {clip.difficulty_tier} (SCORE: {clip.difficulty_score ?? 0})
-                          </span>
-                        )}
-
-                        {/* WPMバッジ */}
-                        {clip.effective_wpm && (
-                          <span className="absolute bottom-2 right-2 bg-slate-950/80 backdrop-blur-md text-slate-400 font-mono text-[9px] px-2 py-0.5 rounded border border-slate-800">
-                            WPM: {clip.effective_wpm}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* クエスト詳細 ＆ ターゲットモンスター枠 */}
-                      <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                        <div className="space-y-2.5">
-                          <div className="flex justify-between items-start gap-2">
-                            <Link
-                              href={`/clips/${clip.id}/prepare`}
-                              className="font-black text-sm text-white hover:text-cyan-400 transition-colors line-clamp-1"
-                            >
-                              {clip.label || "無題のクリップ"}
-                            </Link>
-                            <div className="flex gap-1 shrink-0">
-                              <button
-                                onClick={() => {
-                                  setEditingClip(clip);
-                                  setEditLabel(clip.label || "");
-                                  setEditTags((clip.tags || []).join(", "));
-                                }}
-                                className="text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800 px-1.5 py-0.5 rounded transition-colors"
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                onClick={() => handleDeleteClip(clip.id)}
-                                className="text-xs text-slate-500 hover:text-red-400 hover:bg-red-950/50 px-1.5 py-0.5 rounded transition-colors"
-                              >
-                                🗑️
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* ソシャゲ風ターゲットモンスター情報パネル */}
-                          {mon ? (
-                            <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between shadow-inner">
-                              <div className="flex items-center gap-2.5">
-                                <img
-                                  src={mon.image_url}
-                                  alt={mon.name}
-                                  className="w-10 h-10 object-cover rounded-lg border border-slate-800 shadow"
-                                />
-                                <div>
-                                  <div className="text-[9px] text-amber-400 font-bold tracking-widest">
-                                    {"★".repeat(mon.rarity)}
-                                  </div>
-                                  <div className="text-xs font-black text-slate-200 truncate max-w-[100px] sm:max-w-[120px]">
-                                    {mon.name}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="text-right font-mono">
-                                <div className="text-xs font-black text-cyan-400">☘️ ラック {currentLuck}</div>
-                                <div className="text-[9px] text-slate-500">
-                                  {isLuckMax ? (
-                                    <span className="text-amber-400 font-black animate-pulse">👑 運極達成!</span>
-                                  ) : (
-                                    <span>運極まで あと {remainingLuck} 体</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-[10px] text-slate-500 bg-slate-950/50 border border-slate-900 p-2 rounded-xl text-center font-mono">
-                              モンスター未割り当て
-                            </div>
-                          )}
-
-                          {/* タグ表示 */}
-                          {clip.tags && clip.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {clip.tags.map((t, idx) => (
-                                <button
-                                  key={idx}
-                                  onClick={() => setSearchQuery(t)}
-                                  className="text-[10px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded-md font-mono border border-slate-800 hover:border-cyan-500 hover:text-cyan-400 transition-colors"
-                                >
-                                  #{t}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ソシャゲ風立体出撃ボタン */}
-                        <Link
-                          href={`/clips/${clip.id}/prepare`}
-                          className="block text-center py-2.5 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg shadow-cyan-950/30 border border-cyan-400/20 transition-all uppercase tracking-wider"
-                        >
-                          🔥 クエスト確認・出撃 ➔
-                        </Link>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* ================= 動画原本一覧タブ ================= */}
-        {activeTab === "videos" && (
-          <section>
-            {loading ? (
-              <p className="text-xs text-slate-500 font-mono text-center py-12 animate-pulse">動画データをロード中...</p>
-            ) : filteredVideos.length === 0 ? (
-              <div className="bg-slate-900/40 p-12 text-center border border-slate-800/80 rounded-2xl text-slate-500 text-xs font-mono">
-                該当する動画が見つかりません。
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {filteredVideos.map((video) => {
-                  const thumbUrl = video.youtube_id ? `https://img.youtube.com/vi/${video.youtube_id}/hqdefault.jpg` : null;
-
-                  return (
-                    <Link
-                      key={video.id}
-                      href={`/videos/${video.id}`}
-                      className="bg-slate-900/80 border border-slate-800/80 rounded-2xl overflow-hidden shadow-lg hover:border-indigo-500 transition-all flex flex-col justify-between group"
-                    >
-                      {thumbUrl && (
-                        <div className="aspect-video bg-black overflow-hidden relative">
-                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90" />
-                        </div>
-                      )}
-                      <div className="p-3.5 space-y-1.5">
-                        <h3 className="text-xs font-bold text-slate-200 line-clamp-2 group-hover:text-cyan-400 transition-colors">
-                          {video.title || "（タイトル取得中）"}
-                        </h3>
-                        <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-800/50">
-                          <span>STATUS: {video.status.toUpperCase()}</span>
-                          <span className="text-cyan-400 font-bold">文字起こしを見る ➔</span>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* 編集モーダル */}
-        {editingClip && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-sm space-y-4 text-white shadow-2xl">
-              <h3 className="font-black text-sm tracking-wide border-b border-slate-800 pb-2">✏️ クリップ情報編集</h3>
-              <div className="space-y-3 text-xs">
-                <div>
-                  <label className="block font-bold text-slate-400 mb-1">クリップ名</label>
-                  <input
-                    type="text"
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:border-cyan-500 focus:outline-none"
-                    placeholder="例: 自己紹介の挨拶"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-400 mb-1">タグ (カンマ区切り)</label>
-                  <input
-                    type="text"
-                    value={editTags}
-                    onChange={(e) => setEditTags(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:border-cyan-500 focus:outline-none"
-                    placeholder="例: 日常会話, 初級"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end pt-2">
-                <button onClick={() => setEditingClip(null)} className="px-3.5 py-1.5 text-xs text-slate-400 hover:text-white">キャンセル</button>
-                <button onClick={handleSaveEdit} className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black shadow-md">保存</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ガチャモーダル */}
-        <GachaModal
-          isOpen={isGachaOpen}
-          onClose={() => setIsGachaOpen(false)}
-          onSuccess={() => void fetchData()}
-          orbCount={orbCount}
-        />
-
-      </div>
-    </main>
-  );
-}
-</file>
-
-<file path="src/app/clips/[id]/page.tsx">
+<file path="src/app/clips/[id]/prepare/page.tsx">
 "use client";
 
 import { useEffect, useState } from "react";
@@ -3892,7 +3027,6 @@ interface Monster {
   rarity: number;
   element: string;
   image_url: string;
-  quote_ja?: string;
   stat_int: number;
   stat_ear: number;
   stat_voc: number;
@@ -3910,23 +3044,20 @@ interface Clip {
   difficulty_score?: number | null;
   difficulty_tier?: string | null;
   effective_wpm?: number | null;
-  monster_id?: number | null;
   monsters?: Monster | null;
-  videos?: {
-    youtube_id: string;
-    title: string;
-  };
 }
 
 export default function PreparePage() {
   const params = useParams();
   const router = useRouter();
-  const currentClipId = params?.id as string;
+  const id = params?.id as string;
 
-  const [currentClip, setCurrentClip] = useState<Clip | null>(null);
-  const [allClips, setAllClips] = useState<Clip[]>([]);
+  const [clip, setClip] = useState<Clip | null>(null);
   const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
   const [loading, setLoading] = useState(true);
+
+  // 再生速度 (0.5x ～ 2.0x)
+  const [speed, setSpeed] = useState<number>(1.0);
 
   const supabase = createClient();
 
@@ -3939,27 +3070,30 @@ export default function PreparePage() {
     return 1.0;
   };
 
+  // ドロップ倍率計算: 1.0x -> x1.0, 0.6x -> x0.2, 1.5x -> x2.0
+  const getDropMultiplier = (spd: number) => {
+    const mult = 1.0 + (spd - 1.0) * 2.0;
+    return Math.max(0.1, parseFloat(mult.toFixed(2)));
+  };
+
   useEffect(() => {
-    if (!currentClipId) return;
+    if (!id) return;
 
     async function fetchPrepareData() {
       setLoading(true);
 
       const { data: { user } } = await supabase.auth.getUser();
 
-      // 1. 全クリップリストの取得 (左側ステージリスト用)
-      const { data: clipList } = await supabase
+      const { data: clipData } = await supabase
         .from("clips")
-        .select("*, videos(youtube_id, title), monsters(*)")
-        .order("created_at", { ascending: false });
+        .select("*, monsters(*)")
+        .eq("id", id)
+        .maybeSingle();
 
-      if (clipList) {
-        setAllClips(clipList as Clip[]);
-        const active = clipList.find((c) => c.id === currentClipId) as Clip;
-        if (active) setCurrentClip(active);
+      if (clipData) {
+        setClip(clipData as Clip);
       }
 
-      // 2. 出撃パーティ3体の取得
       if (user) {
         const { data: mData } = await supabase
           .from("user_monsters")
@@ -3995,112 +3129,180 @@ export default function PreparePage() {
     }
 
     void fetchPrepareData();
-  }, [currentClipId, supabase]);
+  }, [id, supabase]);
 
-  // パーティ合計ステータス計算
   const calculateTotalStats = () => {
-    let intSum = 0, earSum = 0;
+    let intSum = 0, earSum = 0, vocSum = 0, focSum = 0, lukSum = 0, gutSum = 0;
+
     partySlots.forEach((m) => {
       if (!m) return;
       const luck = m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 1;
       const mult = getLuckMultiplier(luck);
+
       intSum += Math.round(m.stat_int * mult);
       earSum += Math.round(m.stat_ear * mult);
+      vocSum += Math.round(m.stat_voc * mult);
+      focSum += Math.round(m.stat_foc * mult);
+      lukSum += Math.round(m.stat_luk * mult);
+      gutSum += Math.round(m.stat_gut * mult);
     });
 
     return {
+      int: intSum,
+      ear: earSum,
+      voc: vocSum,
+      foc: focSum,
+      luk: lukSum,
+      gut: gutSum,
       xpMult: Math.min(2.5, 1.0 + intSum * 0.0008).toFixed(2),
       earDropBonus: Math.min(20.0, earSum * 0.006).toFixed(1),
     };
   };
 
-  const getTierBadgeStyle = (tier?: string | null) => {
-    switch (tier) {
-      case "初級": return "bg-emerald-500/20 text-emerald-400 border-emerald-500/50";
-      case "中級": return "bg-cyan-500/20 text-cyan-400 border-cyan-500/50";
-      case "上級": return "bg-amber-500/20 text-amber-400 border-amber-500/50";
-      case "超上級": return "bg-purple-500/20 text-purple-400 border-purple-500/50";
-      case "超絶": return "bg-red-500/20 text-red-400 border-red-500/50 animate-pulse";
-      default: return "bg-slate-700/50 text-slate-300 border-slate-600";
-    }
-  };
+  const stats = calculateTotalStats();
+  const dropMult = getDropMultiplier(speed);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-400 p-8 flex items-center justify-center text-xs font-mono tracking-widest">
-        LOADING STAGE HUD...
-      </div>
-    );
+    return <div className="min-h-screen bg-gray-950 text-white p-8 text-center text-sm font-mono">出撃データを確認中...</div>;
   }
 
-  const targetMon = currentClip?.monsters;
-  const ytId = currentClip?.videos?.youtube_id;
-  const thumbUrl = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
-  const stats = calculateTotalStats();
+  const targetMon = clip?.monsters;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans p-4 sm:p-6 flex flex-col justify-between selection:bg-cyan-500 selection:text-black">
-      
-      {/* 画面トップ：ヘッダーナビゲーション */}
-      <header className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all"
-          >
-            ◀ メインハブに戻る
-          </Link>
-          <h1 className="text-lg font-black tracking-wider uppercase flex items-center gap-2">
-            <span>⚔️</span> クエスト出撃準備 (STAGE SELECT)
-          </h1>
-        </div>
-      </header>
-
-      {/* メインハブ 2カラム領域（画像1再現） */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-stretch">
+    <main className="min-h-screen bg-gray-950 text-white py-8">
+      <div className="max-w-md mx-auto px-4 space-y-5">
         
-        {/* ================= 左側：ダンジョン / クリップ選択リスト (4カラム) ================= */}
-        <div className="lg:col-span-4 bg-slate-900/80 border border-slate-800/90 rounded-2xl p-4 flex flex-col space-y-3 shadow-2xl backdrop-blur-md max-h-[720px] overflow-y-auto">
-          <div className="text-xs font-black tracking-widest text-slate-400 uppercase font-mono border-b border-slate-800 pb-2 flex justify-between">
-            <span>SELECT STAGE</span>
-            <span className="text-cyan-400">{allClips.length} STAGES</span>
+        {/* 上部ヘッダー */}
+        <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+          <Link href="/" className="text-xs text-gray-400 hover:text-white font-bold">
+            ← キャンセル
+          </Link>
+          <span className="text-xs font-black tracking-widest text-cyan-400 uppercase font-mono">
+            STAGE SELECT
+          </span>
+          <div className="w-12"></div>
+        </div>
+
+        {/* クエスト情報カード */}
+        <div className="bg-gradient-to-b from-gray-900 to-gray-950 border-2 border-indigo-600 rounded-2xl p-4 shadow-xl space-y-3 relative overflow-hidden">
+          <div className="flex justify-between items-start border-b border-gray-800 pb-2">
+            <div>
+              <span className="bg-red-600 text-white font-black px-2.5 py-0.5 rounded text-[10px] uppercase tracking-wider">
+                {clip?.difficulty_tier || '中級'} (SCORE: {clip?.difficulty_score ?? 0})
+              </span>
+              <h2 className="text-base font-black text-white mt-1.5 line-clamp-1">
+                {clip?.label || 'ディクテーションクエスト'}
+              </h2>
+            </div>
           </div>
 
-          <div className="space-y-2.5">
-            {allClips.map((c) => {
-              const isSelected = c.id === currentClipId;
-              const mon = c.monsters;
+          {/* ドロップターゲット枠 */}
+          {targetMon ? (
+            <div className="bg-gray-900 p-2.5 rounded-xl border border-gray-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <img src={targetMon.image_url} alt={targetMon.name} className="w-12 h-12 object-cover rounded-lg border border-amber-500/50 shadow" />
+                <div>
+                  <div className="text-[10px] text-amber-400 font-bold">ドロップターゲット {"★".repeat(targetMon.rarity)}</div>
+                  <div className="text-xs font-black text-white">{targetMon.name}</div>
+                </div>
+              </div>
+              <div className="text-right text-[10px] text-cyan-300 font-mono font-bold">
+                ☘️ 運極周回可
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500 text-center py-2 font-mono">ターゲットモンスター未割り当て</div>
+          )}
+        </div>
+
+        {/* ⚡ 再生速度設定 ＆ ドロップ倍率計算パネル */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3 shadow-lg">
+          <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+            <span className="text-xs font-black text-cyan-300 font-mono flex items-center gap-1">
+              ⚡ 再生速度 ＆ ドロップ率設定
+            </span>
+            <span className={`text-xs font-black font-mono px-2 py-0.5 rounded ${
+              dropMult > 1.0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+            }`}>
+              ドロップ率倍率: ×{dropMult.toFixed(2)}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-xs font-mono">
+              <span className="text-gray-400">速度: <strong className="text-white text-sm">{speed.toFixed(1)}x</strong></span>
+              <span className="text-[10px] text-gray-500">（速いほどドロップ率大幅UP!）</span>
+            </div>
+
+            {/* 速度スライダー */}
+            <input
+              type="range"
+              min={0.5}
+              max={2.0}
+              step={0.1}
+              value={speed}
+              onChange={(e) => setSpeed(parseFloat(e.target.value))}
+              className="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+            />
+
+            {/* クイック選択プリセットボタン */}
+            <div className="grid grid-cols-5 gap-1.5 pt-1">
+              {[0.6, 0.8, 1.0, 1.2, 1.5].map((preset) => (
+                <button
+                  key={preset}
+                  onClick={() => setSpeed(preset)}
+                  className={`py-1.5 text-[10px] font-black font-mono rounded-lg transition-all ${
+                    speed === preset
+                      ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/20'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {preset}x
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 出撃デッキ表示 */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3 shadow-lg">
+          <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+            <span className="text-xs font-black text-indigo-300 font-mono">
+              ⚔️ 出撃デッキ (スロット 1〜3)
+            </span>
+            <Link
+              href={`/party?fromClip=${id}`}
+              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg transition-colors"
+            >
+              編成を変更
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[0, 1, 2].map((slotIdx) => {
+              const m = partySlots[slotIdx];
+              const luck = m && m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 0;
 
               return (
                 <div
-                  key={c.id}
-                  onClick={() => router.push(`/clips/${c.id}/prepare`)}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden ${
-                    isSelected
-                      ? "bg-gradient-to-r from-cyan-950/80 to-indigo-950/80 border-cyan-400/80 ring-2 ring-cyan-500/20 shadow-lg shadow-cyan-950/50"
-                      : "bg-slate-950/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/60"
-                  }`}
+                  key={slotIdx}
+                  className="bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-center space-y-1.5 flex flex-col justify-between"
                 >
-                  {/* 選択時ハイライトサイドライン */}
-                  {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-400" />}
-
-                  <div className="space-y-1 flex-1 truncate pl-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-black font-mono border ${getTierBadgeStyle(c.difficulty_tier)}`}>
-                        {c.difficulty_tier || "中級"}
-                      </span>
-                      {c.effective_wpm && (
-                        <span className="text-[9px] text-slate-500 font-mono">WPM {c.effective_wpm}</span>
-                      )}
-                    </div>
-                    <div className={`text-xs font-black truncate ${isSelected ? "text-cyan-300" : "text-slate-200"}`}>
-                      {c.label || "無題のクリップ"}
-                    </div>
+                  <div className="text-[9px] text-gray-500 font-mono font-bold">
+                    #{slotIdx + 1} {slotIdx === 0 && "👑"}
                   </div>
 
-                  {/* ターゲットモンスターのミニ枠 */}
-                  {mon && (
-                    <img src={mon.image_url} alt={mon.name} className="w-9 h-9 object-cover rounded-lg border border-slate-800 shrink-0" />
+                  {m ? (
+                    <>
+                      <img src={m.image_url} alt={m.name} className="w-14 h-14 object-cover rounded-lg mx-auto border border-indigo-500/50" />
+                      <div>
+                        <div className="text-[9px] text-amber-400">{"★".repeat(m.rarity)}</div>
+                        <div className="text-[11px] font-bold truncate">{m.name}</div>
+                        <div className="text-[9px] text-cyan-300 font-mono">☘️ {luck}</div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="py-6 text-gray-700 text-xs font-bold">未設定</div>
                   )}
                 </div>
               );
@@ -4108,125 +3310,942 @@ export default function PreparePage() {
           </div>
         </div>
 
-        {/* ================= 右側：特大メインビジュアル ＆ 詳細パネル (8カラム) ================= */}
-        <div className="lg:col-span-8 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6 shadow-2xl relative overflow-hidden">
-          
-          {/* バックグラウンドシネマティックアート（グラデーションオーバーレイ） */}
-          {thumbUrl && (
-            <div className="absolute inset-0 z-0 pointer-events-none opacity-20 overflow-hidden">
-              <img src={thumbUrl} alt="Background Art" className="w-full h-full object-cover filter blur-sm scale-110" />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent" />
-            </div>
-          )}
-
-          <div className="relative z-10 space-y-5">
-            {/* ステージタイトル ＆ 概要 */}
-            <div className="space-y-2 border-b border-slate-800/80 pb-4">
-              <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-black font-mono border ${getTierBadgeStyle(currentClip?.difficulty_tier)}`}>
-                  {currentClip?.difficulty_tier || "中級"} (SCORE: {currentClip?.difficulty_score ?? 0})
-                </span>
-                <span className="text-xs font-mono text-cyan-400/80">RECOMMENDED SOLO STAGE</span>
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-wide">
-                {currentClip?.label || "ディクテーションダンジョン"}
-              </h2>
-              <p className="text-xs text-slate-400 font-mono leading-relaxed">
-                動画原本: {currentClip?.videos?.title || "英語リスニングトレーニング"}
-              </p>
-            </div>
-
-            {/* ドロップ報酬枠 (画像1・2再現：正方形メタリックアイコン並び) */}
-            <div className="space-y-2.5">
-              <div className="text-xs font-black text-slate-400 font-mono uppercase tracking-wider">
-                🎁 クエストドロップ ＆ 獲得可能リソース
-              </div>
-
-              <div className="flex items-center gap-3 flex-wrap">
-                {/* ターゲットモンスター（ドロップ報酬） */}
-                {targetMon ? (
-                  <div className="bg-slate-950 border-2 border-amber-500/70 p-2.5 rounded-2xl flex items-center gap-3 shadow-lg shadow-amber-950/30">
-                    <img src={targetMon.image_url} alt={targetMon.name} className="w-12 h-12 object-cover rounded-xl border border-amber-400" />
-                    <div>
-                      <div className="text-[9px] text-amber-400 font-bold">{"★".repeat(targetMon.rarity)}</div>
-                      <div className="text-xs font-black text-white">{targetMon.name}</div>
-                      <div className="text-[10px] text-cyan-400 font-mono">☘️ 100%完答でドロップ</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl text-xs text-slate-500 font-mono">
-                    モンスター未割り当て
-                  </div>
-                )}
-
-                {/* 経験値アイコン */}
-                <div className="w-14 h-14 bg-slate-950 border border-purple-500/50 rounded-2xl flex flex-col items-center justify-center text-center shadow">
-                  <span className="text-xs font-black text-purple-400 font-mono">EXP</span>
-                  <span className="text-[9px] text-slate-400 font-mono">x {stats.xpMult}倍</span>
-                </div>
-
-                {/* オーブアイコン */}
-                <div className="w-14 h-14 bg-slate-950 border border-cyan-500/50 rounded-2xl flex flex-col items-center justify-center text-center shadow">
-                  <span className="text-base">💎</span>
-                  <span className="text-[9px] text-cyan-300 font-mono">初回 +5</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 出撃パーティデッキ枠 */}
-            <div className="bg-slate-950/80 border border-slate-800/80 p-4 rounded-2xl space-y-2">
-              <div className="flex justify-between items-center text-xs font-mono">
-                <span className="font-bold text-slate-400">⚔️ 出撃デッキメンバー</span>
-                <span className="text-[10px] text-green-400">ドロップ加算 +{stats.earDropBonus}pt</span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {[0, 1, 2].map((sIdx) => {
-                  const m = partySlots[sIdx];
-                  const luck = m && m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 0;
-
-                  return (
-                    <div key={sIdx} className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl text-center space-y-1">
-                      <div className="text-[9px] text-slate-500 font-mono">#{sIdx + 1} {sIdx === 0 && "👑"}</div>
-                      {m ? (
-                        <>
-                          <img src={m.image_url} alt={m.name} className="w-10 h-10 object-cover rounded-lg mx-auto border border-indigo-500/50" />
-                          <div className="text-[10px] font-bold text-slate-200 truncate">{m.name}</div>
-                          <div className="text-[9px] text-cyan-300 font-mono">☘️ {luck}</div>
-                        </>
-                      ) : (
-                        <div className="py-4 text-[10px] text-slate-600 font-bold">未設定</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+        {/* ステータスサマリー */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3.5 text-xs font-mono grid grid-cols-2 gap-2 text-gray-300">
+          <div className="bg-gray-950 p-2 rounded-lg border border-gray-800">
+            <span className="text-gray-500 block text-[9px]">知力 (INT)</span>
+            <span className="text-sm font-black text-blue-400">{stats.int}</span>
+            <span className="text-[9px] text-gray-400 block">XP: {stats.xpMult}倍</span>
           </div>
-
-          {/* 画面右下：アクション大型ボタン領域 (画像1再現) */}
-          <div className="relative z-10 flex items-center justify-end gap-3 pt-4 border-t border-slate-800/80">
-            {/* パーティ編成へ移動 */}
-            <Link
-              href={`/party?fromClip=${currentClipId}`}
-              className="py-3.5 px-6 bg-slate-800 hover:bg-slate-700 active:translate-y-0.5 border border-slate-700 text-slate-200 font-black text-xs rounded-xl shadow-lg transition-all"
-            >
-              パーティ編成へ
-            </Link>
-
-            {/* ⚔️ 出撃開始 (マッチング・出撃) */}
-            <button
-              onClick={() => router.push(`/clips/${currentClipId}`)}
-              className="py-3.5 px-8 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-sm rounded-xl shadow-2xl shadow-indigo-950 border border-indigo-400/30 transition-all uppercase tracking-widest flex items-center gap-2 animate-pulse"
-            >
-              <span>⚔️ 出 撃 開 始</span>
-            </button>
+          <div className="bg-gray-950 p-2 rounded-lg border border-gray-800">
+            <span className="text-gray-500 block text-[9px]">聴力 (EAR)</span>
+            <span className="text-sm font-black text-green-400">{stats.ear}</span>
+            <span className="text-[9px] text-gray-400 block">ドロップ: +{stats.earDropBonus}pt</span>
           </div>
-
         </div>
+
+        {/* 出撃ボタン (speed パラメータを付与して遷移) */}
+        <button
+          onClick={() => router.push(`/clips/${id}?speed=${speed}`)}
+          className="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:opacity-95 text-white font-black text-lg rounded-2xl shadow-2xl tracking-widest uppercase border border-cyan-400/30 transition-all flex items-center justify-center gap-2 animate-pulse"
+        >
+          <span>🔥 出 撃 （学習スタート）</span>
+        </button>
 
       </div>
     </main>
+  );
+}
+</file>
+
+<file path="src/app/page.tsx">
+'use client';
+
+import { useEffect, useState, Suspense } from 'react';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { useSignedUrl } from '@/lib/useSignedUrl';
+import ClipPlayer from '@/components/ClipPlayer';
+
+interface Segment {
+  id: string;
+  idx: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  ja_text?: string;
+  corrected_text?: string;
+  skeletons?: { text: string; label: string }[];
+}
+
+interface ClozeItem {
+  id: string;
+  segment_id: string;
+  word_from: number;
+  word_to: number;
+  answer: string;
+  variants: string[];
+}
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  element: string;
+  image_url: string;
+  skill_code: string;
+  stat_int: number;
+  stat_ear: number;
+  stat_voc: number;
+  stat_foc: number;
+  stat_luk: number;
+  stat_gut: number;
+}
+
+interface PartyMonster {
+  slot: number;
+  monster: Monster;
+  used: boolean;
+}
+
+const getAttributeMultiplier = (pElem?: string, bElem?: string) => {
+  if (!pElem || !bElem) return 1.0;
+  const p = pElem.toLowerCase();
+  const b = bElem.toLowerCase();
+
+  if (
+    (p === 'fire' && b === 'wind') ||
+    (p === 'water' && b === 'fire') ||
+    (p === 'wind' && b === 'water') ||
+    (p === 'light' && b === 'dark') ||
+    (p === 'dark' && b === 'light')
+  ) {
+    return 1.5;
+  }
+  if (
+    (p === 'fire' && b === 'water') ||
+    (p === 'water' && b === 'wind') ||
+    (p === 'wind' && b === 'fire')
+  ) {
+    return 0.7;
+  }
+  return 1.0;
+};
+
+function ClipBattleInner() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const id = params?.id as string;
+
+  const speedParam = parseFloat(searchParams.get('speed') || '1.0');
+
+  const [clip, setClip] = useState<any>(null);
+  const [targetMonster, setTargetMonster] = useState<Monster | null>(null);
+  const [partyMonsters, setPartyMonsters] = useState<PartyMonster[]>([]);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // バトルステータス
+  const [playerMaxHp, setPlayerMaxHp] = useState(1000);
+  const [playerHp, setPlayerHp] = useState(1000);
+  const [playerBaseAtk, setPlayerAtk] = useState(100);
+
+  const [bossMaxHp, setBossMaxHp] = useState(5000);
+  const [bossHp, setBossHp] = useState(5000);
+  const [bossAtk, setBossAtk] = useState(120);
+
+  const [comboCount, setComboCount] = useState(0);
+  const [activeSegIndex, setActiveSegIndex] = useState(0);
+  const [isAwakened, setIsAwakened] = useState(false);
+  const [clearedWaves, setClearedWaves] = useState<Record<string, boolean>>({});
+
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
+
+  // 💥 アニメーション演出用ステート
+  const [damagePopup, setDamagePopup] = useState<number | null>(null);
+  const [isAttackingAnim, setIsAttackingAnim] = useState(false);
+  const [skillMessage, setSkillMessage] = useState<string | null>(null);
+
+  const [seekToTime, setSeekToTime] = useState<number | null>(null);
+  const [hintCharges, setHintCharges] = useState(0);
+
+  // モーダル管理
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false); // ラウンド解説モーダル
+  const [isContinueModalOpen, setIsContinueModalOpen] = useState(false);
+  const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
+  const [dropResult, setDropResult] = useState<any>(null);
+  const [isSubmittingSession, setIsSubmittingSession] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  const { url: signedUrl } = useSignedUrl(id, 'video');
+  const supabase = createClient();
+
+  useEffect(() => {
+    if (!id) return;
+
+    async function fetchData() {
+      setLoading(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { data: clipData } = await supabase
+        .from('clips')
+        .select('*, videos(youtube_id, title), monsters(*)')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (clipData) {
+        setClip(clipData);
+
+        let boss = clipData.monsters;
+        if (!boss) {
+          const { data: allMonsters } = await supabase.from('monsters').select('*');
+          if (allMonsters && allMonsters.length > 0) {
+            boss = allMonsters[Math.floor(Math.random() * allMonsters.length)];
+          }
+        }
+        setTargetMonster(boss);
+
+        // ボス高耐久化ゲームバランス調整
+        const dScore = clipData.difficulty_score || 50;
+        const bMaxHp = Math.round(dScore * 120 + (boss?.rarity || 1) * 800);
+        const bAtk = Math.round(dScore * 1.5 + (boss?.rarity || 1) * 25);
+        setBossMaxHp(bMaxHp);
+        setBossHp(bMaxHp);
+        setBossAtk(bAtk);
+
+        if (user) {
+          const { data: pList } = await supabase
+            .from('party')
+            .select('slot, monsters(*)')
+            .eq('owner_id', user.id)
+            .order('slot', { ascending: true });
+
+          if (pList) {
+            const formatted: PartyMonster[] = pList.map((p) => ({
+              slot: p.slot,
+              monster: p.monsters as any,
+              used: false,
+            }));
+            setPartyMonsters(formatted);
+
+            let gutSum = 0, focSum = 0, intSum = 0, vocSum = 0;
+            formatted.forEach((pm) => {
+              gutSum += pm.monster.stat_gut || 50;
+              focSum += pm.monster.stat_foc || 50;
+              intSum += pm.monster.stat_int || 50;
+              vocSum += pm.monster.stat_voc || 50;
+            });
+
+            const pHp = gutSum * 8 + focSum * 4 + 400;
+            // プレイヤー攻撃力調整（従来よりマイルド化）
+            const pAtk = Math.round(intSum * 0.4 + vocSum * 0.3 + 30);
+
+            setPlayerMaxHp(pHp);
+            setPlayerHp(pHp);
+            setPlayerAtk(pAtk);
+
+            const leader = formatted.find((p) => p.slot === 1);
+            if (leader) {
+              setHintCharges(Math.min(5, Math.floor((leader.monster.stat_voc || 0) / 400)) + 1);
+            }
+          }
+        }
+
+        const { data: segData } = await supabase
+          .from('segments')
+          .select('*')
+          .eq('video_id', clipData.video_id)
+          .gte('idx', clipData.seg_from ?? 0)
+          .lte('idx', clipData.seg_to ?? 9999)
+          .order('idx', { ascending: true });
+
+        if (segData) setSegments(segData);
+
+        const { data: itemData } = await supabase
+          .from('cloze_items')
+          .select('*')
+          .eq('clip_id', id);
+
+        if (itemData) setClozeItems(itemData);
+      }
+
+      setLoading(false);
+    }
+
+    fetchData();
+  }, [id]);
+
+  const handleInputChange = (key: string, value: string) => {
+    setUserAnswers((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleUseHint = (segId: string, wIdx: number, targetAnswer: string) => {
+    if (hintCharges <= 0) return;
+    const key = `${segId}-${wIdx}`;
+    const currentVal = userAnswers[key] || '';
+    if (currentVal.toLowerCase() === targetAnswer.toLowerCase()) return;
+
+    setUserAnswers((prev) => ({ ...prev, [key]: targetAnswer.charAt(0) }));
+    setHintCharges((prev) => prev - 1);
+  };
+
+  const handleActivateMonsterSkill = (slotIdx: number) => {
+    const pm = partyMonsters.find((p) => p.slot === slotIdx);
+    if (!pm || pm.used) return;
+
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const newAnswers = { ...userAnswers };
+
+    let effectApplied = false;
+
+    if (pm.monster.skill_code === 'VOCAB_HINT_1' || pm.monster.skill_code === 'COMBO_PROTECT_1') {
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        const key = `${currentSeg.id}-${wIdx}`;
+        const targetAns = item ? item.answer : words[wIdx].replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!newAnswers[key] || newAnswers[key].trim().toLowerCase() !== targetAns.toLowerCase()) {
+          newAnswers[key] = targetAns;
+          effectApplied = true;
+          setSkillMessage(`⚡【${pm.monster.name}】のスキルで空欄1つ完全回答！`);
+          break;
+        }
+      }
+    } else {
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        const key = `${currentSeg.id}-${wIdx}`;
+        const targetAns = item ? item.answer : words[wIdx].replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!newAnswers[key] && targetAns.length > 0) {
+          newAnswers[key] = targetAns.charAt(0);
+          effectApplied = true;
+        }
+      }
+      setSkillMessage(`⚡【${pm.monster.name}】のスキルで頭文字を解放！`);
+    }
+
+    if (effectApplied) {
+      setUserAnswers(newAnswers);
+      setPartyMonsters((prev) =>
+        prev.map((p) => (p.slot === slotIdx ? { ...p, used: true } : p))
+      );
+    }
+  };
+
+  // ⚔️ シングルラウンド（1文章）攻撃処理
+  const handleAttackRound = () => {
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const newResults = { ...results };
+
+    let targetCount = 0;
+    let correctCount = 0;
+
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const word = words[wIdx];
+      const key = `${currentSeg.id}-${wIdx}`;
+      const item = segItems.find((it) => it.word_from === wIdx);
+      const isTarget = segItems.length > 0 ? !!item : true;
+
+      if (isTarget) {
+        targetCount++;
+        const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+        const userInput = (userAnswers[key] || '').trim().toLowerCase();
+        const gold = targetAnswer.trim().toLowerCase();
+        const isCorrect = userInput === gold;
+
+        if (isCorrect) correctCount++;
+        newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+      }
+    }
+
+    setResults(newResults);
+    setClearedWaves((prev) => ({ ...prev, [currentSeg.id]: true }));
+
+    const roundAccuracy = targetCount > 0 ? correctCount / targetCount : 1.0;
+    const leaderElem = partyMonsters[0]?.monster.element;
+    const attrMult = getAttributeMultiplier(leaderElem, targetMonster?.element);
+
+    let currentCombo = comboCount;
+    if (roundAccuracy >= 0.8) {
+      currentCombo += 1;
+      setComboCount(currentCombo);
+    } else {
+      setComboCount(0);
+      currentCombo = 0;
+    }
+
+    const comboMult = 1.0 + currentCombo * 0.1;
+    const damageToBoss = Math.round(playerBaseAtk * roundAccuracy * attrMult * comboMult);
+
+    // 💥 アニメーション演出
+    setIsAttackingAnim(true);
+    setDamagePopup(damageToBoss);
+
+    setTimeout(() => {
+      setIsAttackingAnim(false);
+      const newBossHp = Math.max(0, bossHp - damageToBoss);
+      setBossHp(newBossHp);
+
+      setTimeout(() => {
+        setDamagePopup(null);
+      }, 1000);
+
+      // ボスの反撃
+      const bossDamage = Math.round(bossAtk * (1.0 - roundAccuracy * 0.5));
+      const newPlayerHp = Math.max(0, playerHp - bossDamage);
+      setPlayerHp(newPlayerHp);
+
+      if (newPlayerHp <= 0) {
+        setIsContinueModalOpen(true);
+        return;
+      }
+
+      // 攻撃直後に一回「解説・正誤確認モーダル」を挟む！
+      setSaveMessage(null);
+      setIsReviewModalOpen(true);
+
+    }, 400);
+  };
+
+  // 解説モーダルから「次のラウンドへ進む」を押した時
+  const handleProceedNextRound = () => {
+    setIsReviewModalOpen(false);
+
+    if (activeSegIndex < segments.length - 1) {
+      const nextIdx = activeSegIndex + 1;
+      setActiveSegIndex(nextIdx);
+      setSeekToTime(segments[nextIdx].start_ms / 1000);
+    } else {
+      if (bossHp > bossMaxHp * 0.5) {
+        setIsGameOverModalOpen(true);
+      } else {
+        setIsAwakened(true);
+      }
+    }
+  };
+
+  // 間違いをノートに保存
+  const handleSaveMistakes = async () => {
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    let savedCount = 0;
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const key = `${currentSeg.id}-${wIdx}`;
+      const res = results[key];
+
+      if (res && !res.isCorrect) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        await supabase.from('attempts').insert({
+          owner_id: user.id,
+          clip_id: id,
+          segment_id: currentSeg.id,
+          item_id: item?.id || null,
+          input_raw: userAnswers[key] || '',
+          answer_gold: res.answer,
+          score: 0.0,
+          is_correct: false,
+        });
+        savedCount++;
+      }
+    }
+
+    if (savedCount > 0) {
+      setSaveMessage(`💾 ${savedCount} 件の間違いをノートに保存しました！`);
+    } else {
+      setSaveMessage('🎉 全問正解です！保存する誤答はありません。');
+    }
+  };
+
+  // 🔥 覚醒ボスへの最終一括攻撃
+  const handleFinalAttack = async () => {
+    setIsSubmittingSession(true);
+
+    let totalTargetCount = 0;
+    let totalCorrectCount = 0;
+    let filledCount = 0;
+
+    for (const seg of segments) {
+      const words = (seg.corrected_text || seg.text).split(' ');
+      const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const word = words[wIdx];
+        const key = `${seg.id}-${wIdx}`;
+        const item = segItems.find((it) => it.word_from === wIdx);
+
+        const isTarget = segItems.length > 0 ? !!item : true;
+
+        if (isTarget) {
+          totalTargetCount++;
+          const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+          const userInput = (userAnswers[key] || '').trim().toLowerCase();
+          if (userInput !== '') filledCount++;
+
+          if (userInput === targetAnswer.trim().toLowerCase()) {
+            totalCorrectCount++;
+          }
+        }
+      }
+    }
+
+    const rawAccuracy = totalTargetCount > 0 ? (totalCorrectCount / totalTargetCount) * 100 : 0;
+    const finalDamage = Math.round(playerBaseAtk * (rawAccuracy / 100) * 4.0);
+
+    setIsAttackingAnim(true);
+    setDamagePopup(finalDamage);
+
+    setTimeout(async () => {
+      setIsAttackingAnim(false);
+      const finalBossHp = Math.max(0, bossHp - finalDamage);
+      setBossHp(finalBossHp);
+
+      setTimeout(() => setDamagePopup(null), 1000);
+
+      if (finalBossHp > 0) {
+        setIsGameOverModalOpen(true);
+        setIsSubmittingSession(false);
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/drop`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                clipId: id,
+                rawAccuracy: Math.round(rawAccuracy),
+                blankTotal: totalTargetCount,
+                blankFilled: filledCount,
+              }),
+            }
+          );
+
+          const data = await res.json();
+          if (res.ok) {
+            setDropResult(data);
+          }
+        }
+      } catch (err) {
+        console.error('Drop error:', err);
+      } finally {
+        setIsSubmittingSession(false);
+      }
+    }, 400);
+  };
+
+  const handleContinue = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: bal } = await supabase
+        .from('orb_balance')
+        .select('balance')
+        .eq('owner_id', user.id)
+        .single();
+
+      if ((bal?.balance ?? 0) < 1) {
+        alert('オーブが足りません。');
+        return;
+      }
+
+      await supabase.from('orb_ledger').insert({
+        owner_id: user.id,
+        delta: -1,
+        reason: 'battle_continue',
+      });
+
+      setPlayerHp(playerMaxHp);
+      setIsContinueModalOpen(false);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  if (loading) return <div className="min-h-screen bg-slate-950 text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>;
+
+  const currentSeg = segments[activeSegIndex];
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans p-2 sm:p-4 flex flex-col justify-between max-w-md mx-auto relative overflow-hidden select-none">
+      
+      {/* 1. ヘッダー */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
+        <h1 className="text-xs font-black text-white truncate max-w-[200px]">
+          {clip?.label || 'ダンジョン'}
+        </h1>
+        <Link href={`/clips/${id}/prepare`} className="text-[10px] text-cyan-400 font-bold hover:underline">
+          ◀ 撤退
+        </Link>
+      </div>
+
+      {/* ================= 2. パズドラ風 巨大敵ボス表示 ＆ HPバー (テキスト名削除で超シンプル化) ================= */}
+      {targetMonster && (
+        <div className="relative bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl flex flex-col items-center space-y-2 overflow-hidden">
+          
+          {/* 💥 光弾攻撃ヒット演出 */}
+          {isAttackingAnim && (
+            <div className="absolute inset-0 bg-cyan-400/40 backdrop-blur-[1px] z-30 flex items-center justify-center animate-ping" />
+          )}
+
+          {/* 💥 浮遊ダメージ数値ポップアップ */}
+          {damagePopup !== null && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 text-4xl font-black text-red-500 font-mono drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] animate-bounce">
+              -{damagePopup}
+            </div>
+          )}
+
+          {/* パズドラ風 特大敵キャラクター表示（上部テキスト削除） */}
+          <div className="relative w-36 h-36 bg-slate-950 rounded-2xl overflow-hidden border-2 border-red-500/50 shadow-xl my-0.5">
+            <img
+              src={targetMonster.image_url}
+              alt=""
+              className={`w-full h-full object-cover object-top transition-all duration-300 ${isAttackingAnim ? "scale-95 filter brightness-150" : ""}`}
+            />
+            {/* 属性バッジ */}
+            <div className="absolute top-1.5 right-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 shadow">
+              {targetMonster.element} {isAwakened && "🔥AWAKENED"}
+            </div>
+          </div>
+
+          {/* ボスHPゲージ */}
+          <div className="w-full space-y-0.5 z-10">
+            <div className="flex justify-between items-center text-[9px] font-mono text-slate-400">
+              <span>BOSS HP</span>
+              <span className="text-red-400 font-bold">{bossHp} / {bossMaxHp}</span>
+            </div>
+            <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className="h-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 transition-all duration-300"
+                style={{ width: `${Math.max(0, (bossHp / bossMaxHp) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 3. 味方パーティ ＆ プレイヤーHPバー ================= */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 space-y-2 shadow-xl my-2">
+        <div className="flex justify-between items-center text-[10px] font-mono">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-cyan-300">⚔️ 味方パーティ</span>
+            {comboCount > 0 && (
+              <span className="bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.2 rounded-full animate-bounce">
+                {comboCount} COMBO!
+              </span>
+            )}
+          </div>
+          <div>
+            <span className="text-slate-400">HP: </span>
+            <strong className="text-green-400">{playerHp} / {playerMaxHp}</strong>
+          </div>
+        </div>
+
+        {/* プレイヤーHPゲージ */}
+        <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-300"
+            style={{ width: `${Math.max(0, (playerHp / playerMaxHp) * 100)}%` }}
+          />
+        </div>
+
+        {/* 味方パーティ3体アイコン */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {partyMonsters.map((p) => (
+            <button
+              key={p.slot}
+              disabled={p.used}
+              onClick={() => handleActivateMonsterSkill(p.slot)}
+              className={`p-1.5 rounded-xl border text-center transition-all flex items-center gap-1.5 ${
+                p.used
+                  ? "bg-slate-950 border-slate-800 opacity-40 grayscale cursor-not-allowed"
+                  : "bg-indigo-950/80 border-indigo-600 hover:border-cyan-400 active:scale-95 cursor-pointer shadow"
+              }`}
+            >
+              <img src={p.monster.image_url} alt="" className="w-8 h-8 object-cover rounded-lg border border-indigo-500/40 shrink-0" />
+              <div className="text-left min-w-0 flex-1">
+                <div className="text-[9px] font-bold text-slate-200 truncate">{p.monster.name}</div>
+                <div className={`text-[8px] font-black px-1 py-0.2 rounded inline-block ${p.used ? "bg-slate-800 text-slate-500" : "bg-cyan-500 text-black"}`}>
+                  {p.used ? "USED" : "SKILL"}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {skillMessage && (
+        <div className="p-1.5 bg-cyan-950 border border-cyan-500/50 text-cyan-200 text-[10px] font-black rounded-xl text-center animate-bounce shadow">
+          {skillMessage}
+        </div>
+      )}
+
+      {/* ================= 4. パズドラの盤面位置：動画 ＆ 穴埋め入力エリア ================= */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3">
+        
+        {/* 動画プレイヤー (iOS対応1文自動ループ再生) */}
+        {signedUrl && currentSeg && (
+          <ClipPlayer
+            src={signedUrl}
+            seekToTime={seekToTime}
+            playbackSpeed={speedParam}
+            segmentStart={(currentSeg.start_ms || 0) / 1000}
+            segmentEnd={(currentSeg.end_ms || 0) / 1000}
+          />
+        )}
+
+        {/* 穴埋め入力エリア (Wave 1 ～ N) */}
+        {!isAwakened && currentSeg && (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-xs font-mono border-b border-slate-800 pb-1.5">
+              <span className="bg-cyan-500 text-black font-black px-2 py-0.5 rounded-full text-[10px]">
+                WAVE #{ (activeSegIndex + 1).toString().padStart(2, '0') } / { segments.length }
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                ({ ((currentSeg.start_ms || 0) / 1000).toFixed(1) }s - { ((currentSeg.end_ms || 0) / 1000).toFixed(1) }s)
+              </span>
+            </div>
+
+            {/* ディクテーション空欄 */}
+            <div className="flex flex-wrap gap-1.5 items-center font-mono py-1 min-h-[50px] justify-center">
+              { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
+                const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+                const key = `${currentSeg.id}-${wIdx}`;
+                const item = segItems.find((it) => it.word_from === wIdx);
+                const res = results[key];
+
+                const isTarget = segItems.length > 0 ? !!item : true;
+                const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+
+                if (isTarget) {
+                  return (
+                    <div key={wIdx} className="inline-flex flex-col items-center">
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={userAnswers[key] || ''}
+                          onChange={(e) => handleInputChange(key, e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAttackRound(); }}
+                          placeholder="---"
+                          className={`w-20 border-b-2 px-1 py-0.5 text-center text-xs font-black font-mono focus:outline-none transition-colors ${
+                            res ? (res.isCorrect ? 'border-green-500 bg-green-950 text-green-300' : 'border-red-500 bg-red-950 text-red-300') : 'border-cyan-500 bg-slate-950 text-white'
+                          }`}
+                        />
+                        {hintCharges > 0 && !res && (
+                          <button
+                            onClick={() => handleUseHint(currentSeg.id, wIdx, targetAnswer)}
+                            className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow"
+                            title="ヒント"
+                          >
+                            💡
+                          </button>
+                        )}
+                      </div>
+                      {res && (
+                        <span className={`text-[9px] font-bold ${res.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                          {res.isCorrect ? '○' : `× ${res.answer}`}
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <span key={wIdx} className="text-xs font-bold text-slate-200">
+                    {word}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* ⚔️ 攻撃ボタン */}
+            <button
+              onClick={handleAttackRound}
+              className="w-full py-2.5 bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg border border-orange-400/30 transition-all uppercase tracking-widest flex items-center justify-center gap-1"
+            >
+              <span>⚔️ 攻 撃 (回答判定 / Enter)</span>
+            </button>
+          </div>
+        )}
+
+        {/* ボス覚醒状態（ファイナルウェーブ） */}
+        {isAwakened && (
+          <div className="text-center space-y-2 py-2">
+            <span className="bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase animate-bounce inline-block">
+              🔥 FINAL WAVE - BOSS AWAKENED
+            </span>
+            <button
+              onClick={handleFinalAttack}
+              disabled={isSubmittingSession}
+              className="w-full py-3 bg-gradient-to-r from-red-600 via-purple-600 to-indigo-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-xl border border-red-400/30 transition-all uppercase tracking-widest"
+            >
+              <span>🔥 ト ー タ ル ア タ ッ ク （最終判定）</span>
+            </button>
+          </div>
+        )}
+
+      </div>
+
+      {/* ================= 5. ラウンド正誤判定 ＆ 構文・日本語訳解説モーダル ================= */}
+      {isReviewModalOpen && currentSeg && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-cyan-500/80 rounded-2xl p-5 max-w-sm w-full space-y-4 text-white shadow-2xl font-sans">
+            <div className="text-center space-y-1 border-b border-slate-800 pb-2">
+              <span className="bg-cyan-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                ROUND #{activeSegIndex + 1} RESULT
+              </span>
+              <h3 className="text-sm font-black text-white">ラウンド結果 ＆ 解説</h3>
+            </div>
+
+            {/* 正誤判定結果リスト */}
+            <div className="bg-slate-950 p-3 rounded-xl space-y-2 border border-slate-800 text-xs font-mono max-h-48 overflow-y-auto">
+              <div className="text-[10px] text-slate-400 font-bold border-b border-slate-800 pb-1">
+                【単語チェック】
+              </div>
+              { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
+                const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+                const key = `${currentSeg.id}-${wIdx}`;
+                const item = segItems.find((it) => it.word_from === wIdx);
+                const res = results[key];
+                const isTarget = segItems.length > 0 ? !!item : true;
+
+                if (!isTarget) return null;
+
+                return (
+                  <div key={wIdx} className="flex justify-between items-center text-[11px] py-0.5">
+                    <span className="text-slate-400">#Word {wIdx + 1}:</span>
+                    {res ? (
+                      res.isCorrect ? (
+                        <span className="text-green-400 font-bold">○ {res.answer} (正解)</span>
+                      ) : (
+                        <span className="text-red-400 font-bold">
+                          × {userAnswers[key] || "（未入力）"} ➔ <u className="underline">{res.answer}</u>
+                        </span>
+                      )
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 構文 ＆ 日本語訳 */}
+            <div className="space-y-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs">
+              {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
+                <div className="space-y-1">
+                  {currentSeg.skeletons.map((sk, idx) => (
+                    <div key={idx} className="bg-blue-950/80 text-blue-300 p-2 rounded-lg font-mono text-[10px]">
+                      💡 構文: <strong>{sk.text}</strong> ({sk.label})
+                    </div>
+                  ))}
+                </div>
+              )}
+              {currentSeg.ja_text && (
+                <div className="bg-slate-900 text-slate-200 p-2 rounded-lg text-[11px] leading-relaxed">
+                  💡 <strong>訳:</strong> {currentSeg.ja_text}
+                </div>
+              )}
+            </div>
+
+            {saveMessage && (
+              <p className="text-[10px] text-cyan-300 font-mono text-center bg-cyan-950 p-2 rounded-lg border border-cyan-800">
+                {saveMessage}
+              </p>
+            )}
+
+            {/* ボタンアクション */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleSaveMistakes}
+                className="flex-1 py-2.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 font-bold text-xs rounded-xl border border-purple-600 transition-colors"
+              >
+                💾 ノート保存
+              </button>
+              <button
+                onClick={handleProceedNextRound}
+                className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 text-white font-black text-xs rounded-xl shadow-lg transition-all"
+              >
+                次へ進む ➔
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💎 コンティニューモーダル */}
+      {isContinueModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-red-500 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
+            <div className="text-2xl animate-bounce">💀</div>
+            <h3 className="text-base font-black text-red-400">プレイヤー全滅...</h3>
+            <p className="text-xs text-slate-300 font-mono">
+              HPが0になりました。オーブ1個でHP全回復して復活しますか？
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => { setIsContinueModalOpen(false); setIsGameOverModalOpen(true); }} className="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs font-bold">
+                あきらめる
+              </button>
+              <button onClick={handleContinue} className="flex-1 py-2 bg-cyan-600 text-white font-black text-xs rounded-xl shadow">
+                💎 復活する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚨 ゲームオーバーモーダル */}
+      {isGameOverModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
+            <div className="text-2xl">💦</div>
+            <h3 className="text-base font-black text-slate-300">GAME OVER</h3>
+            <p className="text-xs text-slate-400 font-mono">ボスを撃破できませんでした。</p>
+            <button onClick={() => router.push(`/clips/${id}/prepare`)} className="w-full py-2 bg-slate-800 text-white rounded-xl text-xs font-bold">
+              出撃準備へ戻る
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🏆 クエストクリア（ドロップモーダル） */}
+      {dropResult && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-emerald-500 text-white p-5 rounded-2xl max-w-xs w-full text-center space-y-3 shadow-2xl">
+            <div className="text-2xl animate-bounce">🏆</div>
+            <h3 className="text-base font-black text-emerald-400">QUEST CLEAR!</h3>
+            {dropResult.isDropped ? (
+              <div className="space-y-2">
+                <img src={dropResult.monster.image_url} alt="" className="w-20 h-20 object-cover rounded-2xl mx-auto border-2 border-emerald-400 shadow" />
+                <div className="text-xs font-black">{dropResult.monster.name} GET!</div>
+                <div className="text-[10px] text-cyan-400 font-mono">☘️ ラック {dropResult.newLuck}</div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 font-mono">ドロップならず... (確率: {dropResult.dropRateUsed}%)</p>
+            )}
+            <button onClick={() => router.push(`/clips/${id}/prepare`)} className="w-full py-2 bg-emerald-600 text-white rounded-xl text-xs font-black">
+              確認画面へ戻る
+            </button>
+          </div>
+        </div>
+      )}
+
+    </main>
+  );
+}
+
+export default function ClipPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>}>
+      <ClipBattleInner />
+    </Suspense>
   );
 }
 </file>
@@ -4239,67 +4258,73 @@ import { useEffect, useRef, useState } from "react";
 interface ClipPlayerProps {
   src: string;
   seekToTime?: number | null;
+  playbackSpeed?: number;
+  segmentStart?: number | null;
+  segmentEnd?: number | null;
   onTimeUpdate?: (time: number) => void;
 }
 
-export default function ClipPlayer({ src, seekToTime, onTimeUpdate }: ClipPlayerProps) {
+export default function ClipPlayer({
+  src,
+  seekToTime,
+  playbackSpeed = 1.0,
+  segmentStart = null,
+  segmentEnd = null,
+  onTimeUpdate,
+}: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1.0);
-  const [isLooping, setIsLooping] = useState(false);
-  const [loopGap, setLoopGap] = useState<number | null>(null);
+  const isLoopingCoolingDown = useRef(false);
 
-  const isDraggingRef = useRef(false);
-  const pendingSeekTimeRef = useRef<number | null>(null);
+  // 再生速度の自動適用
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed, src]);
 
-  const loopStartRef = useRef(0);
-  const loopEndRef = useRef(3);
-  const isLoopingRef = useRef(isLooping);
-  const lastLoopTimeRef = useRef<number | null>(null);
+  // セグメント切り替え時に先頭へ移動して再生開始
+  useEffect(() => {
+    if (segmentStart !== null && videoRef.current) {
+      videoRef.current.currentTime = segmentStart;
+      void videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    }
+  }, [segmentStart]);
 
-  isLoopingRef.current = isLooping;
-
+  // 特定時間のシーク対応
   useEffect(() => {
     if (seekToTime !== undefined && seekToTime !== null && videoRef.current) {
       videoRef.current.currentTime = seekToTime;
-      void videoRef.current.play();
+      void videoRef.current.play().catch(() => {});
       setIsPlaying(true);
     }
   }, [seekToTime]);
 
-  useEffect(() => {
-    let animId: number;
-    const checkLoop = () => {
-      const v = videoRef.current;
-      if (v && !isDraggingRef.current) {
-        if (pendingSeekTimeRef.current === null) {
-          setCurrentTime(v.currentTime);
-          if (onTimeUpdate) onTimeUpdate(v.currentTime);
-        }
-
-        if (isLoopingRef.current && v.currentTime >= loopEndRef.current) {
-          const now = performance.now();
-          if (lastLoopTimeRef.current !== null) {
-            const expectedDuration = ((loopEndRef.current - loopStartRef.current) * 1000) / v.playbackRate;
-            const pureGap = Math.max(0, Math.round(now - lastLoopTimeRef.current - expectedDuration));
-            setLoopGap(pureGap);
-          }
-          v.currentTime = loopStartRef.current;
-          lastLoopTimeRef.current = performance.now();
-        }
-      }
-      animId = requestAnimationFrame(checkLoop);
-    };
-    animId = requestAnimationFrame(checkLoop);
-    return () => cancelAnimationFrame(animId);
-  }, [onTimeUpdate]);
-
-  const handleLoadedMetadata = () => {
+  // iOS/スマホ対応：timeupdate による安全な1文ループ制御
+  const handleTimeUpdate = () => {
     const v = videoRef.current;
     if (!v) return;
-    setDuration(v.duration);
+
+    if (onTimeUpdate) onTimeUpdate(v.currentTime);
+
+    if (
+      segmentStart !== null &&
+      segmentEnd !== null &&
+      segmentEnd > segmentStart &&
+      !isLoopingCoolingDown.current
+    ) {
+      if (v.currentTime >= segmentEnd - 0.05) {
+        isLoopingCoolingDown.current = true;
+        v.currentTime = segmentStart;
+        if (v.paused) {
+          void v.play().catch(() => {});
+        }
+        setTimeout(() => {
+          isLoopingCoolingDown.current = false;
+        }, 300);
+      }
+    }
   };
 
   const togglePlay = () => {
@@ -4309,95 +4334,994 @@ export default function ClipPlayer({ src, seekToTime, onTimeUpdate }: ClipPlayer
       v.pause();
       setIsPlaying(false);
     } else {
-      void v.play();
-    }
-  };
-
-  const changeSpeed = (rate: number) => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.playbackRate = rate;
-    setPlaybackRate(rate);
-  };
-
-  const handleSeekInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCurrentTime(parseFloat(e.target.value));
-  };
-
-  const handleSeekEnd = (e: React.SyntheticEvent<HTMLInputElement>) => {
-    const newTime = parseFloat((e.currentTarget as HTMLInputElement).value);
-    const v = videoRef.current;
-    if (v) {
-      v.currentTime = newTime;
-    }
-    setTimeout(() => {
-      isDraggingRef.current = false;
-    }, 100);
-  };
-
-  const toggleLoop = () => {
-    const newLoop = !isLooping;
-    setIsLooping(newLoop);
-    if (newLoop && videoRef.current) {
-      loopStartRef.current = videoRef.current.currentTime;
-      loopEndRef.current = Math.min(videoRef.current.currentTime + 3, videoRef.current.duration || 3);
-      lastLoopTimeRef.current = performance.now();
+      void v.play().catch(() => {});
+      setIsPlaying(true);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto p-4 bg-white rounded-xl shadow-md space-y-4 border border-gray-200">
+    <div
+      className="relative w-full rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-xl group cursor-pointer select-none"
+      onClick={togglePlay}
+    >
       <video
         ref={videoRef}
         src={src}
         playsInline
         preload="auto"
-        onLoadedMetadata={handleLoadedMetadata}
+        onTimeUpdate={handleTimeUpdate}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        className="w-full rounded-lg bg-black aspect-video object-contain"
+        className="w-full aspect-video object-contain pointer-events-none"
       />
 
-      <div className="space-y-1">
-        <input
-          type="range"
-          min={0}
-          max={duration || 100}
-          step={0.01}
-          value={currentTime}
-          onPointerDown={() => { isDraggingRef.current = true; }}
-          onChange={handleSeekInput}
-          onPointerUp={handleSeekEnd}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-        />
-        <div className="flex justify-between text-xs text-gray-500 font-mono">
-          <span>{currentTime.toFixed(2)}s</span>
-          <span>{duration.toFixed(2)}s</span>
+      {/* 動画中央再生/一時停止アイコン */}
+      {!isPlaying && (
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
+          <div className="w-12 h-12 rounded-full bg-cyan-500/80 text-black flex items-center justify-center text-xl font-black shadow-lg shadow-cyan-500/50 animate-pulse">
+            ▶
+          </div>
         </div>
+      )}
+
+      {/* 現在の再生速度バッジ */}
+      <div className="absolute top-2 right-2 bg-slate-950/80 backdrop-blur-md text-cyan-300 font-mono text-[9px] font-bold px-2 py-0.5 rounded border border-slate-800">
+        ⚡ {playbackSpeed.toFixed(1)}x
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="src/app/clips/[id]/page.tsx">
+'use client';
+
+import { useEffect, useState, Suspense } from 'react';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { useSignedUrl } from '@/lib/useSignedUrl';
+import ClipPlayer from '@/components/ClipPlayer';
+
+interface Segment {
+  id: string;
+  idx: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  ja_text?: string;
+  corrected_text?: string;
+  skeletons?: { text: string; label: string }[];
+}
+
+interface ClozeItem {
+  id: string;
+  segment_id: string;
+  word_from: number;
+  word_to: number;
+  answer: string;
+  variants: string[];
+}
+
+interface Monster {
+  id: number;
+  name: string;
+  name_en: string;
+  rarity: number;
+  element: string;
+  image_url: string;
+  skill_code: string;
+  stat_int: number;
+  stat_ear: number;
+  stat_voc: number;
+  stat_foc: number;
+  stat_luk: number;
+  stat_gut: number;
+}
+
+interface PartyMonster {
+  slot: number;
+  monster: Monster;
+  used: boolean;
+}
+
+const getAttributeMultiplier = (pElem?: string, bElem?: string) => {
+  if (!pElem || !bElem) return 1.0;
+  const p = pElem.toLowerCase();
+  const b = bElem.toLowerCase();
+
+  if (
+    (p === 'fire' && b === 'wind') ||
+    (p === 'water' && b === 'fire') ||
+    (p === 'wind' && b === 'water') ||
+    (p === 'light' && b === 'dark') ||
+    (p === 'dark' && b === 'light')
+  ) {
+    return 1.5;
+  }
+  if (
+    (p === 'fire' && b === 'water') ||
+    (p === 'water' && b === 'wind') ||
+    (p === 'wind' && b === 'fire')
+  ) {
+    return 0.7;
+  }
+  return 1.0;
+};
+
+function ClipBattleInner() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const id = params?.id as string;
+
+  const speedParam = parseFloat(searchParams.get('speed') || '1.0');
+
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const [clip, setClip] = useState<any>(null);
+  const [targetMonster, setTargetMonster] = useState<Monster | null>(null);
+  const [partyMonsters, setPartyMonsters] = useState<PartyMonster[]>([]);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [clozeItems, setClozeItems] = useState<ClozeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // バトルステータス
+  const [playerMaxHp, setPlayerMaxHp] = useState(1000);
+  const [playerHp, setPlayerHp] = useState(1000);
+  const [playerBaseAtk, setPlayerAtk] = useState(100);
+
+  const [bossMaxHp, setBossMaxHp] = useState(5000);
+  const [bossHp, setBossHp] = useState(5000);
+  const [bossAtk, setBossAtk] = useState(120);
+
+  const [comboCount, setComboCount] = useState(0);
+  const [activeSegIndex, setActiveSegIndex] = useState(0);
+  const [isAwakened, setIsAwakened] = useState(false);
+  const [clearedWaves, setClearedWaves] = useState<Record<string, boolean>>({});
+
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
+  const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
+
+  // アニメーション演出用ステート
+  const [damagePopup, setDamagePopup] = useState<number | null>(null);
+  const [isAttackingAnim, setIsAttackingAnim] = useState(false);
+  const [skillMessage, setSkillMessage] = useState<string | null>(null);
+
+  const [seekToTime, setSeekToTime] = useState<number | null>(null);
+  const [hintCharges, setHintCharges] = useState(0);
+
+  // モーダル管理
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [isContinueModalOpen, setIsContinueModalOpen] = useState(false);
+  const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
+  const [dropResult, setDropResult] = useState<any>(null);
+  const [isSubmittingSession, setIsSubmittingSession] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  const { url: signedUrl } = useSignedUrl(signedIn ? id : null, 'video');
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSignedIn(!!data.session);
+    });
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!id || signedIn === null) return;
+
+    if (!signedIn) {
+      setLoading(false);
+      return;
+    }
+
+    async function fetchData() {
+      setLoading(true);
+      setErrorMsg(null);
+
+      try {
+        const { data: { user }, error: userErr } = await supabase.auth.getUser();
+        if (userErr || !user) {
+          setSignedIn(false);
+          return;
+        }
+
+        const { data: clipData, error: clipErr } = await supabase
+          .from('clips')
+          .select('*, videos(youtube_id, title), monsters(*)')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (clipErr) throw clipErr;
+
+        if (!clipData) {
+          setErrorMsg('指定されたクリップが見つかりませんでした。');
+          return;
+        }
+
+        setClip(clipData);
+
+        let boss = clipData.monsters;
+        if (!boss) {
+          const { data: allMonsters } = await supabase.from('monsters').select('*');
+          if (allMonsters && allMonsters.length > 0) {
+            boss = allMonsters[Math.floor(Math.random() * allMonsters.length)];
+          }
+        }
+        setTargetMonster(boss);
+
+        const dScore = clipData.difficulty_score || 50;
+        const bMaxHp = Math.round(dScore * 120 + (boss?.rarity || 1) * 800);
+        const bAtk = Math.round(dScore * 1.5 + (boss?.rarity || 1) * 25);
+        setBossMaxHp(bMaxHp);
+        setBossHp(bMaxHp);
+        setBossAtk(bAtk);
+
+        const { data: pList } = await supabase
+          .from('party')
+          .select('slot, monsters(*)')
+          .eq('owner_id', user.id)
+          .order('slot', { ascending: true });
+
+        if (pList) {
+          const formatted: PartyMonster[] = pList.map((p) => ({
+            slot: p.slot,
+            monster: p.monsters as any,
+            used: false,
+          }));
+          setPartyMonsters(formatted);
+
+          let gutSum = 0, focSum = 0, intSum = 0, vocSum = 0;
+          formatted.forEach((pm) => {
+            if (!pm.monster) return;
+            gutSum += pm.monster.stat_gut || 50;
+            focSum += pm.monster.stat_foc || 50;
+            intSum += pm.monster.stat_int || 50;
+            vocSum += pm.monster.stat_voc || 50;
+          });
+
+          const pHp = gutSum * 8 + focSum * 4 + 400;
+          const pAtk = Math.round(intSum * 0.4 + vocSum * 0.3 + 30);
+
+          setPlayerMaxHp(pHp);
+          setPlayerHp(pHp);
+          setPlayerAtk(pAtk);
+
+          const leader = formatted.find((p) => p.slot === 1);
+          if (leader && leader.monster) {
+            setHintCharges(Math.min(5, Math.floor((leader.monster.stat_voc || 0) / 400)) + 1);
+          }
+        }
+
+        const { data: segData, error: segErr } = await supabase
+          .from('segments')
+          .select('*')
+          .eq('video_id', clipData.video_id)
+          .gte('idx', clipData.seg_from ?? 0)
+          .lte('idx', clipData.seg_to ?? 9999)
+          .order('idx', { ascending: true });
+
+        if (segErr) throw segErr;
+        if (segData) setSegments(segData);
+
+        const { data: itemData, error: itemErr } = await supabase
+          .from('cloze_items')
+          .select('*')
+          .eq('clip_id', id);
+
+        if (itemErr) throw itemErr;
+        if (itemData) setClozeItems(itemData);
+
+      } catch (err: any) {
+        console.error('Fetch error:', err);
+        setErrorMsg(`データ読み込みエラー: ${err.message || String(err)}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, [id, signedIn, supabase]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) setAuthError(error.message);
+    else setSignedIn(true);
+  };
+
+  const handleInputChange = (key: string, value: string) => {
+    setUserAnswers((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleUseHint = (segId: string, wIdx: number, targetAnswer: string) => {
+    if (hintCharges <= 0) return;
+    const key = `${segId}-${wIdx}`;
+    const currentVal = userAnswers[key] || '';
+    if (currentVal.toLowerCase() === targetAnswer.toLowerCase()) return;
+
+    setUserAnswers((prev) => ({ ...prev, [key]: targetAnswer.charAt(0) }));
+    setHintCharges((prev) => prev - 1);
+  };
+
+  const handleActivateMonsterSkill = (slotIdx: number) => {
+    const pm = partyMonsters.find((p) => p.slot === slotIdx);
+    if (!pm || pm.used) return;
+
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const newAnswers = { ...userAnswers };
+
+    let effectApplied = false;
+
+    if (pm.monster.skill_code === 'VOCAB_HINT_1' || pm.monster.skill_code === 'COMBO_PROTECT_1') {
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        const key = `${currentSeg.id}-${wIdx}`;
+        const targetAns = item ? item.answer : words[wIdx].replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!newAnswers[key] || newAnswers[key].trim().toLowerCase() !== targetAns.toLowerCase()) {
+          newAnswers[key] = targetAns;
+          effectApplied = true;
+          setSkillMessage(`⚡【${pm.monster.name}】のスキルで空欄1つ完全回答！`);
+          break;
+        }
+      }
+    } else {
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        const key = `${currentSeg.id}-${wIdx}`;
+        const targetAns = item ? item.answer : words[wIdx].replace(/[^a-zA-Z0-9]/g, '');
+
+        if (!newAnswers[key] && targetAns.length > 0) {
+          newAnswers[key] = targetAns.charAt(0);
+          effectApplied = true;
+        }
+      }
+      setSkillMessage(`⚡【${pm.monster.name}】のスキルで頭文字を解放！`);
+    }
+
+    if (effectApplied) {
+      setUserAnswers(newAnswers);
+      setPartyMonsters((prev) =>
+        prev.map((p) => (p.slot === slotIdx ? { ...p, used: true } : p))
+      );
+    }
+  };
+
+  const handleAttackRound = () => {
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const newResults = { ...results };
+
+    let targetCount = 0;
+    let correctCount = 0;
+
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const word = words[wIdx];
+      const key = `${currentSeg.id}-${wIdx}`;
+      const item = segItems.find((it) => it.word_from === wIdx);
+      const isTarget = segItems.length > 0 ? !!item : true;
+
+      if (isTarget) {
+        targetCount++;
+        const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+        const userInput = (userAnswers[key] || '').trim().toLowerCase();
+        const gold = targetAnswer.trim().toLowerCase();
+        const isCorrect = userInput === gold;
+
+        if (isCorrect) correctCount++;
+        newResults[key] = { isCorrect, score: isCorrect ? 1.0 : 0.0, answer: targetAnswer };
+      }
+    }
+
+    setResults(newResults);
+    setClearedWaves((prev) => ({ ...prev, [currentSeg.id]: true }));
+
+    const roundAccuracy = targetCount > 0 ? correctCount / targetCount : 1.0;
+    const leaderElem = partyMonsters[0]?.monster.element;
+    const attrMult = getAttributeMultiplier(leaderElem, targetMonster?.element);
+
+    let currentCombo = comboCount;
+    if (roundAccuracy >= 0.8) {
+      currentCombo += 1;
+      setComboCount(currentCombo);
+    } else {
+      setComboCount(0);
+      currentCombo = 0;
+    }
+
+    const comboMult = 1.0 + currentCombo * 0.1;
+    const damageToBoss = Math.round(playerBaseAtk * roundAccuracy * attrMult * comboMult);
+
+    setIsAttackingAnim(true);
+    setDamagePopup(damageToBoss);
+
+    setTimeout(() => {
+      setIsAttackingAnim(false);
+      const newBossHp = Math.max(0, bossHp - damageToBoss);
+      setBossHp(newBossHp);
+
+      setTimeout(() => {
+        setDamagePopup(null);
+      }, 1000);
+
+      const bossDamage = Math.round(bossAtk * (1.0 - roundAccuracy * 0.5));
+      const newPlayerHp = Math.max(0, playerHp - bossDamage);
+      setPlayerHp(newPlayerHp);
+
+      if (newPlayerHp <= 0) {
+        setIsContinueModalOpen(true);
+        return;
+      }
+
+      setSaveMessage(null);
+      setIsReviewModalOpen(true);
+
+    }, 400);
+  };
+
+  const handleProceedNextRound = () => {
+    setIsReviewModalOpen(false);
+
+    if (activeSegIndex < segments.length - 1) {
+      const nextIdx = activeSegIndex + 1;
+      setActiveSegIndex(nextIdx);
+      setSeekToTime(segments[nextIdx].start_ms / 1000);
+    } else {
+      if (bossHp > bossMaxHp * 0.5) {
+        setIsGameOverModalOpen(true);
+      } else {
+        setIsAwakened(true);
+      }
+    }
+  };
+
+  const handleSaveMistakes = async () => {
+    const currentSeg = segments[activeSegIndex];
+    if (!currentSeg) return;
+
+    const words = (currentSeg.corrected_text || currentSeg.text).split(' ');
+    const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    let savedCount = 0;
+    for (let wIdx = 0; wIdx < words.length; wIdx++) {
+      const key = `${currentSeg.id}-${wIdx}`;
+      const res = results[key];
+
+      if (res && !res.isCorrect) {
+        const item = segItems.find((it) => it.word_from === wIdx);
+        await supabase.from('attempts').insert({
+          owner_id: user.id,
+          clip_id: id,
+          segment_id: currentSeg.id,
+          item_id: item?.id || null,
+          input_raw: userAnswers[key] || '',
+          answer_gold: res.answer,
+          score: 0.0,
+          is_correct: false,
+        });
+        savedCount++;
+      }
+    }
+
+    if (savedCount > 0) {
+      setSaveMessage(`💾 ${savedCount} 件の間違いをノートに保存しました！`);
+    } else {
+      setSaveMessage('🎉 全問正解です！保存する誤答はありません。');
+    }
+  };
+
+  const handleFinalAttack = async () => {
+    setIsSubmittingSession(true);
+
+    let totalTargetCount = 0;
+    let totalCorrectCount = 0;
+    let filledCount = 0;
+
+    for (const seg of segments) {
+      const words = (seg.corrected_text || seg.text).split(' ');
+      const segItems = clozeItems.filter((it) => it.segment_id === seg.id);
+
+      for (let wIdx = 0; wIdx < words.length; wIdx++) {
+        const word = words[wIdx];
+        const key = `${seg.id}-${wIdx}`;
+        const item = segItems.find((it) => it.word_from === wIdx);
+
+        const isTarget = segItems.length > 0 ? !!item : true;
+
+        if (isTarget) {
+          totalTargetCount++;
+          const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+          const userInput = (userAnswers[key] || '').trim().toLowerCase();
+          if (userInput !== '') filledCount++;
+
+          if (userInput === targetAnswer.trim().toLowerCase()) {
+            totalCorrectCount++;
+          }
+        }
+      }
+    }
+
+    const rawAccuracy = totalTargetCount > 0 ? (totalCorrectCount / totalTargetCount) * 100 : 0;
+    const finalDamage = Math.round(playerBaseAtk * (rawAccuracy / 100) * 4.0);
+
+    setIsAttackingAnim(true);
+    setDamagePopup(finalDamage);
+
+    setTimeout(async () => {
+      setIsAttackingAnim(false);
+      const finalBossHp = Math.max(0, bossHp - finalDamage);
+      setBossHp(finalBossHp);
+
+      setTimeout(() => setDamagePopup(null), 1000);
+
+      if (finalBossHp > 0) {
+        setIsGameOverModalOpen(true);
+        setIsSubmittingSession(false);
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/drop`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                clipId: id,
+                rawAccuracy: Math.round(rawAccuracy),
+                blankTotal: totalTargetCount,
+                blankFilled: filledCount,
+              }),
+            }
+          );
+
+          const data = await res.json();
+          if (res.ok) {
+            setDropResult(data);
+          }
+        }
+      } catch (err) {
+        console.error('Drop error:', err);
+      } finally {
+        setIsSubmittingSession(false);
+      }
+    }, 400);
+  };
+
+  const handleContinue = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: bal } = await supabase
+        .from('orb_balance')
+        .select('balance')
+        .eq('owner_id', user.id)
+        .single();
+
+      if ((bal?.balance ?? 0) < 1) {
+        alert('オーブが足りません。');
+        return;
+      }
+
+      await supabase.from('orb_ledger').insert({
+        owner_id: user.id,
+        delta: -1,
+        reason: 'battle_continue',
+      });
+
+      setPlayerHp(playerMaxHp);
+      setIsContinueModalOpen(false);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  if (signedIn === false) {
+    return (
+      <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-16 p-6 space-y-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl text-white">
+        <h2 className="text-xl font-black text-center tracking-wide">PLAYER LOGIN</h2>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
+        <button className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white py-3 rounded-xl font-black text-sm shadow-lg transition-all">ログイン</button>
+        {authError && <p className="text-red-400 text-xs text-center font-mono">{authError}</p>}
+      </form>
+    );
+  }
+
+  if (loading) return <div className="min-h-screen bg-slate-950 text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>;
+
+  if (errorMsg) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white p-8 flex flex-col items-center justify-center space-y-4 text-center">
+        <p className="text-sm text-red-400 font-mono">{errorMsg}</p>
+        <Link href="/" className="px-4 py-2 bg-slate-800 text-cyan-400 rounded-xl text-xs font-bold">
+          ◀ ダッシュボードに戻る
+        </Link>
+      </div>
+    );
+  }
+
+  const currentSeg = segments[activeSegIndex];
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans p-2 sm:p-4 flex flex-col justify-between max-w-md mx-auto relative overflow-hidden select-none">
+      
+      {/* 1. ヘッダー */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
+        <h1 className="text-xs font-black text-white truncate max-w-[200px]">
+          {clip?.label || 'ダンジョン'}
+        </h1>
+        <Link href={`/clips/${id}/prepare`} className="text-[10px] text-cyan-400 font-bold hover:underline">
+          ◀ 撤退
+        </Link>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <button onClick={togglePlay} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700">
-          {isPlaying ? "PAUSE" : "PLAY"}
-        </button>
+      {/* ================= 2. パズドラ風 巨大敵ボス表示 ＆ HPバー ================= */}
+      {targetMonster && (
+        <div className="relative bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl flex flex-col items-center space-y-2 overflow-hidden">
+          
+          {isAttackingAnim && (
+            <div className="absolute inset-0 bg-cyan-400/40 backdrop-blur-[1px] z-30 flex items-center justify-center animate-ping" />
+          )}
 
-        <div className="flex gap-1">
-          {[0.6, 1.0, 1.2].map((rate) => (
+          {damagePopup !== null && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 text-4xl font-black text-red-500 font-mono drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] animate-bounce">
+              -{damagePopup}
+            </div>
+          )}
+
+          <div className="relative w-36 h-36 bg-slate-950 rounded-2xl overflow-hidden border-2 border-red-500/50 shadow-xl my-0.5">
+            <img
+              src={targetMonster.image_url}
+              alt=""
+              className={`w-full h-full object-cover object-top transition-all duration-300 ${isAttackingAnim ? "scale-95 filter brightness-150" : ""}`}
+            />
+            <div className="absolute top-1.5 right-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 shadow">
+              {targetMonster.element} {isAwakened && "🔥AWAKENED"}
+            </div>
+          </div>
+
+          <div className="w-full space-y-0.5 z-10">
+            <div className="flex justify-between items-center text-[9px] font-mono text-slate-400">
+              <span>BOSS HP</span>
+              <span className="text-red-400 font-bold">{bossHp} / {bossMaxHp}</span>
+            </div>
+            <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+              <div
+                className="h-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 transition-all duration-300"
+                style={{ width: `${Math.max(0, (bossHp / bossMaxHp) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 3. 味方パーティ ＆ プレイヤーHPバー ================= */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 space-y-2 shadow-xl my-2">
+        <div className="flex justify-between items-center text-[10px] font-mono">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-cyan-300">⚔️ 味方パーティ</span>
+            {comboCount > 0 && (
+              <span className="bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.2 rounded-full animate-bounce">
+                {comboCount} COMBO!
+              </span>
+            )}
+          </div>
+          <div>
+            <span className="text-slate-400">HP: </span>
+            <strong className="text-green-400">{playerHp} / {playerMaxHp}</strong>
+          </div>
+        </div>
+
+        <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-300"
+            style={{ width: `${Math.max(0, (playerHp / playerMaxHp) * 100)}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5">
+          {partyMonsters.map((p) => (
             <button
-              key={rate}
-              onClick={() => changeSpeed(rate)}
-              className={`px-2 py-1 rounded text-xs font-bold ${playbackRate === rate ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-700"}`}
+              key={p.slot}
+              disabled={p.used}
+              onClick={() => handleActivateMonsterSkill(p.slot)}
+              className={`p-1.5 rounded-xl border text-center transition-all flex items-center gap-1.5 ${
+                p.used
+                  ? "bg-slate-950 border-slate-800 opacity-40 grayscale cursor-not-allowed"
+                  : "bg-indigo-950/80 border-indigo-600 hover:border-cyan-400 active:scale-95 cursor-pointer shadow"
+              }`}
             >
-              {rate}x
+              <img src={p.monster?.image_url} alt="" className="w-8 h-8 object-cover rounded-lg border border-indigo-500/40 shrink-0" />
+              <div className="text-left min-w-0 flex-1">
+                <div className="text-[9px] font-bold text-slate-200 truncate">{p.monster?.name}</div>
+                <div className={`text-[8px] font-black px-1 py-0.2 rounded inline-block ${p.used ? "bg-slate-800 text-slate-500" : "bg-cyan-500 text-black"}`}>
+                  {p.used ? "USED" : "SKILL"}
+                </div>
+              </div>
             </button>
           ))}
         </div>
-
-        <button onClick={toggleLoop} className={`px-3 py-2 rounded-lg font-bold text-xs ${isLooping ? "bg-green-600 text-white" : "bg-gray-200 text-gray-700"}`}>
-          {isLooping ? "LOOP ON" : "LOOP OFF"}
-        </button>
       </div>
-    </div>
+
+      {skillMessage && (
+        <div className="p-1.5 bg-cyan-950 border border-cyan-500/50 text-cyan-200 text-[10px] font-black rounded-xl text-center animate-bounce shadow">
+          {skillMessage}
+        </div>
+      )}
+
+      {/* ================= 4. パズドラの盤面位置：動画 ＆ 穴埋め入力エリア ================= */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3">
+        
+        {signedUrl && currentSeg && (
+          <ClipPlayer
+            src={signedUrl}
+            seekToTime={seekToTime}
+            playbackSpeed={speedParam}
+            segmentStart={(currentSeg.start_ms || 0) / 1000}
+            segmentEnd={(currentSeg.end_ms || 0) / 1000}
+          />
+        )}
+
+        {!isAwakened && currentSeg && (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-xs font-mono border-b border-slate-800 pb-1.5">
+              <span className="bg-cyan-500 text-black font-black px-2 py-0.5 rounded-full text-[10px]">
+                WAVE #{ (activeSegIndex + 1).toString().padStart(2, '0') } / { segments.length }
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">
+                ({ ((currentSeg.start_ms || 0) / 1000).toFixed(1) }s - { ((currentSeg.end_ms || 0) / 1000).toFixed(1) }s)
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 items-center font-mono py-1 min-h-[50px] justify-center">
+              { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
+                const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+                const key = `${currentSeg.id}-${wIdx}`;
+                const item = segItems.find((it) => it.word_from === wIdx);
+                const res = results[key];
+
+                const isTarget = segItems.length > 0 ? !!item : true;
+                const targetAnswer = item ? item.answer : word.replace(/[^a-zA-Z0-9]/g, '');
+
+                if (isTarget) {
+                  return (
+                    <div key={wIdx} className="inline-flex flex-col items-center">
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={userAnswers[key] || ''}
+                          onChange={(e) => handleInputChange(key, e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAttackRound(); }}
+                          placeholder="---"
+                          className={`w-20 border-b-2 px-1 py-0.5 text-center text-xs font-black font-mono focus:outline-none transition-colors ${
+                            res ? (res.isCorrect ? 'border-green-500 bg-green-950 text-green-300' : 'border-red-500 bg-red-950 text-red-300') : 'border-cyan-500 bg-slate-950 text-white'
+                          }`}
+                        />
+                        {hintCharges > 0 && !res && (
+                          <button
+                            onClick={() => handleUseHint(currentSeg.id, wIdx, targetAnswer)}
+                            className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow"
+                            title="ヒント"
+                          >
+                            💡
+                          </button>
+                        )}
+                      </div>
+                      {res && (
+                        <span className={`text-[9px] font-bold ${res.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                          {res.isCorrect ? '○' : `× ${res.answer}`}
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <span key={wIdx} className="text-xs font-bold text-slate-200">
+                    {word}
+                  </span>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={handleAttackRound}
+              className="w-full py-2.5 bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg border border-orange-400/30 transition-all uppercase tracking-widest flex items-center justify-center gap-1"
+            >
+              <span>⚔️ 攻 撃 (回答判定 / Enter)</span>
+            </button>
+          </div>
+        )}
+
+        {isAwakened && (
+          <div className="text-center space-y-2 py-2">
+            <span className="bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase animate-bounce inline-block">
+              🔥 FINAL WAVE - BOSS AWAKENED
+            </span>
+            <button
+              onClick={handleFinalAttack}
+              disabled={isSubmittingSession}
+              className="w-full py-3 bg-gradient-to-r from-red-600 via-purple-600 to-indigo-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-xl border border-red-400/30 transition-all uppercase tracking-widest"
+            >
+              <span>🔥 ト ー タ ル ア タ ッ ク （最終判定）</span>
+            </button>
+          </div>
+        )}
+
+      </div>
+
+      {/* ================= 5. ラウンド正誤判定 ＆ 構文・日本語訳解説モーダル ================= */}
+      {isReviewModalOpen && currentSeg && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-cyan-500/80 rounded-2xl p-5 max-w-sm w-full space-y-4 text-white shadow-2xl font-sans">
+            <div className="text-center space-y-1 border-b border-slate-800 pb-2">
+              <span className="bg-cyan-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                ROUND #{activeSegIndex + 1} RESULT
+              </span>
+              <h3 className="text-sm font-black text-white">ラウンド結果 ＆ 解説</h3>
+            </div>
+
+            <div className="bg-slate-950 p-3 rounded-xl space-y-2 border border-slate-800 text-xs font-mono max-h-48 overflow-y-auto">
+              <div className="text-[10px] text-slate-400 font-bold border-b border-slate-800 pb-1">
+                【単語チェック】
+              </div>
+              { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
+                const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+                const key = `${currentSeg.id}-${wIdx}`;
+                const item = segItems.find((it) => it.word_from === wIdx);
+                const res = results[key];
+                const isTarget = segItems.length > 0 ? !!item : true;
+
+                if (!isTarget) return null;
+
+                return (
+                  <div key={wIdx} className="flex justify-between items-center text-[11px] py-0.5">
+                    <span className="text-slate-400">#Word {wIdx + 1}:</span>
+                    {res ? (
+                      res.isCorrect ? (
+                        <span className="text-green-400 font-bold">○ {res.answer} (正解)</span>
+                      ) : (
+                        <span className="text-red-400 font-bold">
+                          × {userAnswers[key] || "（未入力）"} ➔ <u className="underline">{res.answer}</u>
+                        </span>
+                      )
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs">
+              {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
+                <div className="space-y-1">
+                  {currentSeg.skeletons.map((sk, idx) => (
+                    <div key={idx} className="bg-blue-950/80 text-blue-300 p-2 rounded-lg font-mono text-[10px]">
+                      💡 構文: <strong>{sk.text}</strong> ({sk.label})
+                    </div>
+                  ))}
+                </div>
+              )}
+              {currentSeg.ja_text && (
+                <div className="bg-slate-900 text-slate-200 p-2 rounded-lg text-[11px] leading-relaxed">
+                  💡 <strong>訳:</strong> {currentSeg.ja_text}
+                </div>
+              )}
+            </div>
+
+            {saveMessage && (
+              <p className="text-[10px] text-cyan-300 font-mono text-center bg-cyan-950 p-2 rounded-lg border border-cyan-800">
+                {saveMessage}
+              </p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleSaveMistakes}
+                className="flex-1 py-2.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 font-bold text-xs rounded-xl border border-purple-600 transition-colors"
+              >
+                💾 ノート保存
+              </button>
+              <button
+                onClick={handleProceedNextRound}
+                className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 text-white font-black text-xs rounded-xl shadow-lg transition-all"
+              >
+                次へ進む ➔
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💎 コンティニューモーダル */}
+      {isContinueModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-red-500 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
+            <div className="text-2xl animate-bounce">💀</div>
+            <h3 className="text-base font-black text-red-400">プレイヤー全滅...</h3>
+            <p className="text-xs text-slate-300 font-mono">
+              HPが0になりました。オーブ1個でHP全回復して復活しますか？
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => { setIsContinueModalOpen(false); setIsGameOverModalOpen(true); }} className="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs font-bold">
+                あきらめる
+              </button>
+              <button onClick={handleContinue} className="flex-1 py-2 bg-cyan-600 text-white font-black text-xs rounded-xl shadow">
+                💎 復活する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚨 ゲームオーバーモーダル */}
+      {isGameOverModalOpen && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
+            <div className="text-2xl">💦</div>
+            <h3 className="text-base font-black text-slate-300">GAME OVER</h3>
+            <p className="text-xs text-slate-400 font-mono">ボスを撃破できませんでした。</p>
+            <button onClick={() => router.push(`/clips/${id}/prepare`)} className="w-full py-2 bg-slate-800 text-white rounded-xl text-xs font-bold">
+              出撃準備へ戻る
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🏆 クエストクリア */}
+      {dropResult && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-emerald-500 text-white p-5 rounded-2xl max-w-xs w-full text-center space-y-3 shadow-2xl">
+            <div className="text-2xl animate-bounce">🏆</div>
+            <h3 className="text-base font-black text-emerald-400">QUEST CLEAR!</h3>
+            {dropResult.isDropped ? (
+              <div className="space-y-2">
+                <img src={dropResult.monster.image_url} alt="" className="w-20 h-20 object-cover rounded-2xl mx-auto border-2 border-emerald-400 shadow" />
+                <div className="text-xs font-black">{dropResult.monster.name} GET!</div>
+                <div className="text-[10px] text-cyan-400 font-mono">☘️ ラック {dropResult.newLuck}</div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 font-mono">ドロップならず... (確率: {dropResult.dropRateUsed}%)</p>
+            )}
+            <button onClick={() => router.push(`/clips/${id}/prepare`)} className="w-full py-2 bg-emerald-600 text-white rounded-xl text-xs font-black">
+              確認画面へ戻る
+            </button>
+          </div>
+        </div>
+      )}
+
+    </main>
+  );
+}
+
+export default function ClipPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>}>
+      <ClipBattleInner />
+    </Suspense>
   );
 }
 </file>
