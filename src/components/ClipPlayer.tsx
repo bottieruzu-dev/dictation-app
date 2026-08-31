@@ -23,11 +23,9 @@ export default function ClipPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const isCoolingDownRef = useRef(false);
 
-  // 文頭の切れ防止バッファ (0.3秒前から再生開始)
   const bufferedStart = segmentStart !== null ? Math.max(0, segmentStart - 0.3) : null;
   const bufferedEnd = segmentEnd !== null ? segmentEnd + 0.1 : null;
 
-  // リアルタイムに最新の範囲を参照するためのRef
   const rangeRef = useRef<{ start: number | null; end: number | null }>({
     start: bufferedStart,
     end: bufferedEnd,
@@ -35,16 +33,15 @@ export default function ClipPlayer({
 
   useEffect(() => {
     rangeRef.current = { start: bufferedStart, end: bufferedEnd };
-  }, [bufferedStart, bufferedEnd]);
+    console.log("📍 [Range Updated]", { bufferedStart, bufferedEnd, rawStart: segmentStart, rawEnd: segmentEnd });
+  }, [bufferedStart, bufferedEnd, segmentStart, segmentEnd]);
 
-  // 再生速度の自動適用
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.playbackRate = playbackSpeed;
     }
   }, [playbackSpeed, src]);
 
-  // セグメント切り替え時に先頭へ移動して再生開始
   useEffect(() => {
     if (bufferedStart !== null && videoRef.current) {
       isCoolingDownRef.current = true;
@@ -57,7 +54,6 @@ export default function ClipPlayer({
     }
   }, [segmentStart]);
 
-  // 特定時間のシーク対応
   useEffect(() => {
     if (seekToTime !== undefined && seekToTime !== null && videoRef.current) {
       isCoolingDownRef.current = true;
@@ -70,16 +66,20 @@ export default function ClipPlayer({
     }
   }, [seekToTime]);
 
-  // ループ位置チェック共通ロジック
   const checkAndLoop = () => {
     const v = videoRef.current;
     const { start, end } = rangeRef.current;
 
-    if (v && !v.paused && start !== null && end !== null) {
+    if (v && !v.paused) {
       if (onTimeUpdate) onTimeUpdate(v.currentTime);
 
-      // 終了時間を超えた場合、確定で開始位置へ巻き戻す
-      if (!isCoolingDownRef.current && v.currentTime >= end) {
+      // 🔍 デバッグ用ログ（再生中に定期出力）
+      if (Math.floor(v.currentTime * 10) % 5 === 0) {
+        console.log(`⏱️ current: ${v.currentTime.toFixed(2)}s | targetEnd: ${end}s | cooldown: ${isCoolingDownRef.current}`);
+      }
+
+      if (start !== null && end !== null && !isCoolingDownRef.current && v.currentTime >= end) {
+        console.log("🔄 【LOOP TRIGGERED】 巻き戻しを実行します");
         isCoolingDownRef.current = true;
         v.currentTime = start;
         if (v.paused) {
@@ -92,15 +92,12 @@ export default function ClipPlayer({
     }
   };
 
-  // 1. 高頻度フレーム監視 (requestAnimationFrame)
   useEffect(() => {
     let animId: number;
-
     const loop = () => {
       checkAndLoop();
       animId = requestAnimationFrame(loop);
     };
-
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
   }, []);
@@ -114,7 +111,6 @@ export default function ClipPlayer({
       v.pause();
       setIsPlaying(false);
     } else {
-      // 指定範囲外にいる場合は開始位置へ移動してから再生
       if (
         start !== null &&
         end !== null &&
@@ -137,13 +133,12 @@ export default function ClipPlayer({
         src={src}
         playsInline
         preload="auto"
-        onTimeUpdate={checkAndLoop} // 2. 動画標準イベントによる二重監視
+        onTimeUpdate={checkAndLoop}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full aspect-video object-contain pointer-events-none"
       />
 
-      {/* 動画中央再生/一時停止アイコン */}
       {!isPlaying && (
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-cyan-500/80 text-black flex items-center justify-center text-xl font-black shadow-lg shadow-cyan-500/50 animate-pulse">
@@ -152,7 +147,6 @@ export default function ClipPlayer({
         </div>
       )}
 
-      {/* 現在の再生速度バッジ */}
       <div className="absolute top-2 right-2 bg-slate-950/80 backdrop-blur-md text-cyan-300 font-mono text-[9px] font-bold px-2 py-0.5 rounded border border-slate-800">
         ⚡ {playbackSpeed.toFixed(1)}x
       </div>
