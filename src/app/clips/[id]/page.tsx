@@ -94,7 +94,6 @@ function ClipBattleInner() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // バトルステータス
   const [playerMaxHp, setPlayerMaxHp] = useState(1000);
   const [playerHp, setPlayerHp] = useState(1000);
   const [playerBaseAtk, setPlayerAtk] = useState(100);
@@ -111,7 +110,6 @@ function ClipBattleInner() {
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
 
-  // アニメーション演出用ステート
   const [damagePopup, setDamagePopup] = useState<number | null>(null);
   const [isAttackingAnim, setIsAttackingAnim] = useState(false);
   const [skillMessage, setSkillMessage] = useState<string | null>(null);
@@ -119,7 +117,6 @@ function ClipBattleInner() {
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [hintCharges, setHintCharges] = useState(0);
 
-  // モーダル管理
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isContinueModalOpen, setIsContinueModalOpen] = useState(false);
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
@@ -801,7 +798,7 @@ function ClipBattleInner() {
       {/* ================= 5. ラウンド正誤判定 ＆ 構文・日本語訳解説モーダル ================= */}
       {isReviewModalOpen && currentSeg && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-cyan-500/80 rounded-2xl p-5 max-w-sm w-full space-y-4 text-white shadow-2xl font-sans">
+          <div className="bg-slate-900 border-2 border-cyan-500/80 rounded-2xl p-5 max-w-sm w-full space-y-4 text-white shadow-2xl font-sans max-h-[90vh] overflow-y-auto">
             <div className="text-center space-y-1 border-b border-slate-800 pb-2">
               <span className="bg-cyan-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
                 ROUND #{activeSegIndex + 1} RESULT
@@ -809,9 +806,38 @@ function ClipBattleInner() {
               <h3 className="text-sm font-black text-white">ラウンド結果 ＆ 解説</h3>
             </div>
 
-            <div className="bg-slate-950 p-3 rounded-xl space-y-2 border border-slate-800 text-xs font-mono max-h-48 overflow-y-auto">
+            {/* 🆕 解読された英文全文（色付き） */}
+            <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-sm font-bold leading-relaxed text-slate-200">
+              { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
+                const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
+                const item = segItems.find((it) => it.word_from === wIdx);
+                const isTarget = segItems.length > 0 ? !!item : true;
+                const key = `${currentSeg.id}-${wIdx}`;
+                const res = results[key];
+
+                if (isTarget && res) {
+                  return (
+                    <span key={wIdx} className={`mx-0.5 px-1 rounded ${res.isCorrect ? 'text-green-400 bg-green-950/80 border border-green-900' : 'text-red-400 bg-red-950/80 border border-red-900 underline'}`}>
+                      {res.answer}
+                    </span>
+                  );
+                }
+                return <span key={wIdx} className="mx-0.5">{word}</span>;
+              })}
+            </div>
+
+            {/* 🆕 日本語訳 */}
+            {currentSeg.ja_text && (
+              <div className="bg-slate-800/50 text-slate-200 p-3 rounded-xl text-xs leading-relaxed border border-slate-700">
+                <span className="text-amber-400 font-bold mr-1">💡 訳:</span> 
+                {currentSeg.ja_text}
+              </div>
+            )}
+
+            {/* 単語入力チェック（詳細） */}
+            <div className="bg-slate-950 p-3 rounded-xl space-y-2 border border-slate-800 text-xs font-mono max-h-32 overflow-y-auto">
               <div className="text-[10px] text-slate-400 font-bold border-b border-slate-800 pb-1">
-                【単語チェック】
+                【単語入力チェック】
               </div>
               { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
                 const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
@@ -839,22 +865,16 @@ function ClipBattleInner() {
               })}
             </div>
 
-            <div className="space-y-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs">
-              {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
-                <div className="space-y-1">
-                  {currentSeg.skeletons.map((sk, idx) => (
-                    <div key={idx} className="bg-blue-950/80 text-blue-300 p-2 rounded-lg font-mono text-[10px]">
-                      💡 構文: <strong>{sk.text}</strong> ({sk.label})
-                    </div>
-                  ))}
-                </div>
-              )}
-              {currentSeg.ja_text && (
-                <div className="bg-slate-900 text-slate-200 p-2 rounded-lg text-[11px] leading-relaxed">
-                  💡 <strong>訳:</strong> {currentSeg.ja_text}
-                </div>
-              )}
-            </div>
+            {/* 構文 */}
+            {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
+              <div className="space-y-1">
+                {currentSeg.skeletons.map((sk, idx) => (
+                  <div key={idx} className="bg-blue-950/80 text-blue-300 p-2 rounded-lg font-mono text-[10px]">
+                    💡 構文: <strong>{sk.text}</strong> ({sk.label})
+                  </div>
+                ))}
+              </div>
+            )}
 
             {saveMessage && (
               <p className="text-[10px] text-cyan-300 font-mono text-center bg-cyan-950 p-2 rounded-lg border border-cyan-800">
@@ -862,16 +882,17 @@ function ClipBattleInner() {
               </p>
             )}
 
-            <div className="flex gap-2 pt-1">
+            {/* ボタンアクション */}
+            <div className="flex gap-2 pt-1 sticky bottom-0 bg-slate-900 pb-1">
               <button
                 onClick={handleSaveMistakes}
-                className="flex-1 py-2.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 font-bold text-xs rounded-xl border border-purple-600 transition-colors"
+                className="flex-1 py-3 bg-purple-900/80 hover:bg-purple-800 text-purple-200 font-bold text-xs rounded-xl border border-purple-600 transition-colors"
               >
                 💾 ノート保存
               </button>
               <button
                 onClick={handleProceedNextRound}
-                className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 text-white font-black text-xs rounded-xl shadow-lg transition-all"
+                className="flex-1 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 text-white font-black text-xs rounded-xl shadow-lg transition-all"
               >
                 次へ進む ➔
               </button>
@@ -915,7 +936,7 @@ function ClipBattleInner() {
         </div>
       )}
 
-      {/* 🏆 クエストクリア */}
+      {/* 🏆 クエストクリア（ドロップモーダル） */}
       {dropResult && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-slate-900 border-2 border-emerald-500 text-white p-5 rounded-2xl max-w-xs w-full text-center space-y-3 shadow-2xl">
