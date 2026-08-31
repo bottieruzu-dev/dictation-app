@@ -21,6 +21,7 @@ export default function ClipPlayer({
 }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const isLoopingCoolingDown = useRef(false);
 
   // 再生速度の自動適用
   useEffect(() => {
@@ -28,6 +29,15 @@ export default function ClipPlayer({
       videoRef.current.playbackRate = playbackSpeed;
     }
   }, [playbackSpeed, src]);
+
+  // セグメント切り替え時に先頭へ移動して再生開始
+  useEffect(() => {
+    if (segmentStart !== null && videoRef.current) {
+      videoRef.current.currentTime = segmentStart;
+      void videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    }
+  }, [segmentStart]);
 
   // 特定時間のシーク対応
   useEffect(() => {
@@ -38,28 +48,31 @@ export default function ClipPlayer({
     }
   }, [seekToTime]);
 
-  // 1文厳密自動ループ再生制御
-  useEffect(() => {
-    let animId: number;
+  // iOS/スマホ対応：timeupdate による安全な1文ループ制御
+  const handleTimeUpdate = () => {
+    const v = videoRef.current;
+    if (!v) return;
 
-    const checkSegmentLoop = () => {
-      const v = videoRef.current;
-      if (v) {
-        if (onTimeUpdate) onTimeUpdate(v.currentTime);
+    if (onTimeUpdate) onTimeUpdate(v.currentTime);
 
-        if (segmentStart !== null && segmentEnd !== null && segmentEnd > segmentStart) {
-          if (v.currentTime >= segmentEnd || v.currentTime < segmentStart - 0.2) {
-            v.currentTime = segmentStart;
-            if (v.paused) void v.play().catch(() => {});
-          }
+    if (
+      segmentStart !== null &&
+      segmentEnd !== null &&
+      segmentEnd > segmentStart &&
+      !isLoopingCoolingDown.current
+    ) {
+      if (v.currentTime >= segmentEnd - 0.05) {
+        isLoopingCoolingDown.current = true;
+        v.currentTime = segmentStart;
+        if (v.paused) {
+          void v.play().catch(() => {});
         }
+        setTimeout(() => {
+          isLoopingCoolingDown.current = false;
+        }, 300);
       }
-      animId = requestAnimationFrame(checkSegmentLoop);
-    };
-
-    animId = requestAnimationFrame(checkSegmentLoop);
-    return () => cancelAnimationFrame(animId);
-  }, [segmentStart, segmentEnd, onTimeUpdate]);
+    }
+  };
 
   const togglePlay = () => {
     const v = videoRef.current;
@@ -74,18 +87,22 @@ export default function ClipPlayer({
   };
 
   return (
-    <div className="relative w-full rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-xl group cursor-pointer" onClick={togglePlay}>
+    <div
+      className="relative w-full rounded-2xl overflow-hidden bg-black border border-slate-800 shadow-xl group cursor-pointer select-none"
+      onClick={togglePlay}
+    >
       <video
         ref={videoRef}
         src={src}
         playsInline
         preload="auto"
+        onTimeUpdate={handleTimeUpdate}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         className="w-full aspect-video object-contain pointer-events-none"
       />
 
-      {/* 動画中央再生/一時停止オーバレイ */}
+      {/* 動画中央再生/一時停止アイコン */}
       {!isPlaying && (
         <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
           <div className="w-12 h-12 rounded-full bg-cyan-500/80 text-black flex items-center justify-center text-xl font-black shadow-lg shadow-cyan-500/50 animate-pulse">
