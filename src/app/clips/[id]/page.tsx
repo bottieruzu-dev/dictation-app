@@ -94,7 +94,6 @@ function ClipBattleInner() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // バトルステータス
   const [playerMaxHp, setPlayerMaxHp] = useState(1000);
   const [playerHp, setPlayerHp] = useState(1000);
   const [playerBaseAtk, setPlayerAtk] = useState(100);
@@ -111,7 +110,6 @@ function ClipBattleInner() {
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
 
-  // 💥 アニメーション演出用ステート
   const [damagePopup, setDamagePopup] = useState<number | null>(null);
   const [isAttackingAnim, setIsAttackingAnim] = useState(false);
   const [skillMessage, setSkillMessage] = useState<string | null>(null);
@@ -119,7 +117,6 @@ function ClipBattleInner() {
   const [seekToTime, setSeekToTime] = useState<number | null>(null);
   const [hintCharges, setHintCharges] = useState(0);
 
-  // モーダル管理
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isContinueModalOpen, setIsContinueModalOpen] = useState(false);
   const [isGameOverModalOpen, setIsGameOverModalOpen] = useState(false);
@@ -501,9 +498,30 @@ function ClipBattleInner() {
         return;
       }
 
+      // 🏆 撃破成功！RP獲得 ＆ ドロップ判定API呼び出し
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+
+          // 🌹 RP獲得算定 (基本10 RP + 速度1.5x以上で+2 + 超絶で+5)
+          const spdBonus = speedParam >= 1.5 ? 2 : 0;
+          const diffBonus = clip?.difficulty_tier === '超絶' ? 5 : 0;
+          const earnedRp = 10 + spdBonus + diffBonus;
+
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: currentProf } = await supabase
+              .from('profiles')
+              .select('romance_points')
+              .eq('id', user.id)
+              .maybeSingle();
+
+            const updatedRp = (currentProf?.romance_points || 0) + earnedRp;
+            await supabase
+              .from('profiles')
+              .upsert({ id: user.id, romance_points: updatedRp });
+          }
+
           const res = await fetch(
             `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/drop`,
             {
@@ -798,7 +816,7 @@ function ClipBattleInner() {
 
       </div>
 
-      {/* ================= 5. ラウンド正誤判定 ＆ 構文・日本語訳解説モーダル (幅溢れ防止・自動折り返し修正) ================= */}
+      {/* ================= 5. ラウンド正誤判定 ＆ 構文・日本語訳解説モーダル ================= */}
       {isReviewModalOpen && currentSeg && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 z-50 animate-fadeIn">
           <div className="bg-slate-900 border-2 border-cyan-500/80 rounded-2xl p-4 max-w-xs sm:max-w-sm w-full space-y-3 text-white shadow-2xl font-sans max-h-[90vh] overflow-y-auto min-w-0">
@@ -809,7 +827,6 @@ function ClipBattleInner() {
               <h3 className="text-sm font-black text-white">ラウンド結果 ＆ 解説</h3>
             </div>
 
-            {/* 🆕 解読された英文全文（自動折り返し・幅溢れ防止修正） */}
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs font-bold leading-relaxed text-slate-200 flex flex-wrap gap-1 items-center font-mono w-full min-w-0 break-words">
               { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
                 const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
@@ -829,7 +846,6 @@ function ClipBattleInner() {
               })}
             </div>
 
-            {/* 🆕 日本語訳 */}
             {currentSeg.ja_text && (
               <div className="bg-slate-800/50 text-slate-200 p-2.5 rounded-xl text-xs leading-relaxed border border-slate-700 break-words">
                 <span className="text-amber-400 font-bold mr-1">💡 訳:</span> 
@@ -837,7 +853,6 @@ function ClipBattleInner() {
               </div>
             )}
 
-            {/* 単語入力チェック（詳細） */}
             <div className="bg-slate-950 p-2.5 rounded-xl space-y-1.5 border border-slate-800 text-xs font-mono max-h-32 overflow-y-auto break-all min-w-0">
               <div className="text-[10px] text-slate-400 font-bold border-b border-slate-800 pb-1">
                 【単語入力チェック】
@@ -868,7 +883,6 @@ function ClipBattleInner() {
               })}
             </div>
 
-            {/* 構文 */}
             {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
               <div className="space-y-1">
                 {currentSeg.skeletons.map((sk, idx) => (
@@ -885,7 +899,6 @@ function ClipBattleInner() {
               </p>
             )}
 
-            {/* ボタンアクション */}
             <div className="flex gap-2 pt-1">
               <button
                 onClick={handleSaveMistakes}

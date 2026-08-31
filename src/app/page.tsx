@@ -317,7 +317,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <nav className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
+          <nav className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-slate-800/80">
+            <Link
+              href="/romance"
+              className="py-2.5 px-3 bg-gradient-to-r from-pink-700 via-rose-600 to-purple-800 hover:opacity-90 active:translate-y-0.5 border border-pink-400/30 text-white text-xs font-black rounded-xl shadow-lg shadow-pink-950 transition-all flex items-center justify-center gap-1.5 col-span-2 sm:col-span-1"
+            >
+              <span>🌹</span> ワールドロマンス
+            </Link>
+
             <Link
               href="/party"
               className="py-2.5 px-3 bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 hover:from-indigo-600 hover:to-indigo-700 active:translate-y-0.5 border border-indigo-400/30 text-white text-xs font-black rounded-xl shadow-lg shadow-indigo-950 transition-all flex items-center justify-center gap-1.5"
