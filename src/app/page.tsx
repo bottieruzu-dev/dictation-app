@@ -66,6 +66,11 @@ export default function DashboardPage() {
 
   const supabase = createClient();
 
+  // サムネイル読み込み失敗時のフォールバック処理
+  const handleThumbError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    e.currentTarget.src = "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=400";
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSignedIn(!!data.session);
@@ -450,6 +455,7 @@ export default function DashboardPage() {
                           <img
                             src={thumbUrl}
                             alt="Thumbnail"
+                            onError={handleThumbError}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90"
                           />
                         ) : (
@@ -588,7 +594,12 @@ export default function DashboardPage() {
                     >
                       {thumbUrl && (
                         <div className="aspect-video bg-black overflow-hidden relative">
-                          <img src={thumbUrl} alt="Thumbnail" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90" />
+                          <img
+                            src={thumbUrl}
+                            alt="Thumbnail"
+                            onError={handleThumbError}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90"
+                          />
                         </div>
                       )}
                       <div className="p-3.5 space-y-1.5">
