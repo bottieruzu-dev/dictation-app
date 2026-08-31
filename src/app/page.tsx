@@ -33,6 +33,7 @@ interface Clip {
   monster_id?: number | null;
   monsters?: Monster | null;
   user_luck?: number;
+  is_cleared?: boolean;
   videos?: {
     youtube_id: string;
     title: string;
@@ -66,7 +67,6 @@ export default function DashboardPage() {
 
   const supabase = createClient();
 
-  // サムネイル読み込み失敗時のフォールバック処理
   const handleThumbError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     e.currentTarget.src = "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=400";
   };
@@ -109,6 +109,19 @@ export default function DashboardPage() {
       }
     }
 
+    // クリア済みクリップの取得
+    let clearedClipIds = new Set<string>();
+    if (user) {
+      const { data: clearData } = await supabase
+        .from("play_sessions")
+        .select("clip_id")
+        .eq("owner_id", user.id);
+
+      if (clearData) {
+        clearData.forEach((row) => clearedClipIds.add(row.clip_id));
+      }
+    }
+
     const { data: cData } = await supabase
       .from("clips")
       .select("*, videos(youtube_id, title), monsters(*)")
@@ -118,6 +131,7 @@ export default function DashboardPage() {
       const formattedClips: Clip[] = cData.map((c: any) => ({
         ...c,
         user_luck: c.monster_id ? (luckMap[c.monster_id] ?? 0) : 0,
+        is_cleared: clearedClipIds.has(c.id),
       }));
       setClips(formattedClips);
     }
@@ -322,7 +336,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <nav className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-slate-800/80">
+          <nav className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2 border-t border-slate-800/80">
+            <Link
+              href="/missions"
+              className="py-2.5 px-3 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:opacity-90 active:translate-y-0.5 border border-amber-400/30 text-white text-xs font-black rounded-xl shadow-lg shadow-amber-950 transition-all flex items-center justify-center gap-1.5 col-span-2 sm:col-span-1"
+            >
+              <span>🎯</span> ミッション
+            </Link>
+
             <Link
               href="/romance"
               className="py-2.5 px-3 bg-gradient-to-r from-pink-700 via-rose-600 to-purple-800 hover:opacity-90 active:translate-y-0.5 border border-pink-400/30 text-white text-xs font-black rounded-xl shadow-lg shadow-pink-950 transition-all flex items-center justify-center gap-1.5 col-span-2 sm:col-span-1"
@@ -460,6 +481,17 @@ export default function DashboardPage() {
                           />
                         ) : (
                           <div className="w-full h-full bg-slate-950 flex items-center justify-center text-slate-700 font-mono text-xs">NO THUMBNAIL</div>
+                        )}
+
+                        {/* クリア状態バッジ（NEWかCLEARか判別） */}
+                        {clip.is_cleared ? (
+                          <span className="absolute top-2.5 right-2.5 bg-emerald-500 text-black font-black text-[9px] font-mono px-2 py-0.5 rounded-full shadow-lg border border-emerald-300">
+                            CLEAR
+                          </span>
+                        ) : (
+                          <span className="absolute top-2.5 right-2.5 bg-gradient-to-r from-amber-400 to-yellow-300 text-black font-black text-[9px] font-mono px-2 py-0.5 rounded-full shadow-lg border border-amber-200 animate-pulse">
+                            NEW (初回💎2)
+                          </span>
                         )}
 
                         {clip.difficulty_tier && (
