@@ -69,6 +69,11 @@ export default function RomancePage() {
 
   const supabase = createClient();
 
+  // 画像読み込みエラー時のフォールバック処理
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    e.currentTarget.src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600";
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSignedIn(!!data.session);
@@ -114,7 +119,6 @@ export default function RomancePage() {
 
     if (cData && cData.length > 0) {
       setCountries(cData);
-      // 初期状態の第一カ国（アメリカなど）を自動選択
       setSelectedCountry(cData[0]);
     }
 
@@ -360,6 +364,7 @@ export default function RomancePage() {
                       <img
                         src={h.image_url}
                         alt={h.name}
+                        onError={handleImageError}
                         className={`w-full h-full object-cover object-top transition-transform duration-300 ${isUnlocked ? "" : "blur-sm grayscale opacity-50"}`}
                       />
 
@@ -414,6 +419,7 @@ export default function RomancePage() {
                     <img
                       src={activeHeroine.image_url}
                       alt={activeHeroine.name}
+                      onError={handleImageError}
                       className={`w-full h-full object-cover object-top ${isUnlocked ? "" : "blur-md grayscale"}`}
                     />
                   </div>
@@ -497,6 +503,7 @@ export default function RomancePage() {
                 <img
                   src={novelDialogue.heroine.image_url}
                   alt={novelDialogue.heroine.name}
+                  onError={handleImageError}
                   className="w-full h-full object-cover object-top"
                 />
               </div>
