@@ -21,7 +21,6 @@ export default function ClipPlayer({
 }: ClipPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isTimeOutOfBounds, setIsTimeOutOfBounds] = useState(false);
   const isCoolingDownRef = useRef(false);
 
   // 文頭の切れ防止バッファ (0.3秒前から再生開始)
@@ -37,27 +36,15 @@ export default function ClipPlayer({
     rangeRef.current = { start: bufferedStart, end: bufferedEnd };
   }, [bufferedStart, bufferedEnd]);
 
-  // 安全なシーク処理（動画の総再生時間を超えないようガード）
   const safeSeek = (targetTime: number) => {
     const v = videoRef.current;
     if (!v) return;
 
-    const duration = v.duration;
-    // メタデータ読み込み前、または動画長さを超えている場合の安全ガード
-    if (isNaN(duration) || duration <= 0) return;
-
-    if (targetTime >= duration) {
-      setIsTimeOutOfBounds(true);
-      console.warn(`⚠️ [ClipPlayer] 指定時間(${targetTime.toFixed(1)}s)が動画長さ(${duration.toFixed(1)}s)を超えています。`);
-      return;
-    }
-
-    setIsTimeOutOfBounds(false);
     isCoolingDownRef.current = true;
     v.currentTime = targetTime;
     setTimeout(() => {
       isCoolingDownRef.current = false;
-    }, 500);
+    }, 400);
   };
 
   // 再生速度の自動適用
@@ -91,7 +78,7 @@ export default function ClipPlayer({
     }
   };
 
-  // 厳密なループチェック (安全ガード付き)
+  // 厳密なループチェック
   const checkAndLoop = () => {
     const v = videoRef.current;
     const { start, end } = rangeRef.current;
@@ -99,13 +86,7 @@ export default function ClipPlayer({
     if (v && !v.paused && start !== null && end !== null && !isCoolingDownRef.current) {
       if (onTimeUpdate) onTimeUpdate(v.currentTime);
 
-      const duration = v.duration;
-      // 動画の長さを超えているタイムスタンプの場合はループ判定を行わない
-      if (!isNaN(duration) && start >= duration) {
-        return;
-      }
-
-      // 終了時間を超えたら巻き戻す
+      // 終了時間を超えたら開始位置へ巻き戻す
       if (v.currentTime >= end) {
         safeSeek(start);
       }
@@ -134,8 +115,6 @@ export default function ClipPlayer({
       if (
         start !== null &&
         end !== null &&
-        v.duration &&
-        start < v.duration &&
         (v.currentTime >= end || v.currentTime < start - 0.5)
       ) {
         safeSeek(start);
@@ -167,13 +146,6 @@ export default function ClipPlayer({
           <div className="w-12 h-12 rounded-full bg-cyan-500/80 text-black flex items-center justify-center text-xl font-black shadow-lg shadow-cyan-500/50 animate-pulse">
             ▶
           </div>
-        </div>
-      )}
-
-      {/* タイムスタンプ不整合警告表示 */}
-      {isTimeOutOfBounds && (
-        <div className="absolute bottom-2 left-2 bg-red-950/90 border border-red-500 text-red-200 text-[10px] font-mono px-2 py-1 rounded shadow">
-          ⚠️ 字幕時間({segmentStart?.toFixed(1)}s)が動画長さ({videoRef.current?.duration.toFixed(1)}s)を超えています
         </div>
       )}
 

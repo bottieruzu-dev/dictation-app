@@ -498,12 +498,10 @@ function ClipBattleInner() {
         return;
       }
 
-      // 🏆 撃破成功！RP獲得 ＆ ドロップ判定API呼び出し
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
 
-          // 🌹 RP獲得算定 (基本10 RP + 速度1.5x以上で+2 + 超絶で+5)
           const spdBonus = speedParam >= 1.5 ? 2 : 0;
           const diffBonus = clip?.difficulty_tier === '超絶' ? 5 : 0;
           const earnedRp = 10 + spdBonus + diffBonus;
@@ -608,6 +606,12 @@ function ClipBattleInner() {
 
   const currentSeg = segments[activeSegIndex];
 
+  // クリップ切り出し動画（0sスタート）に対応するための相対時間計算
+  const clipStartMs = clip?.start_ms ?? (segments[0]?.start_ms || 0);
+  const relSegStart = currentSeg ? Math.max(0, (currentSeg.start_ms - clipStartMs) / 1000) : null;
+  const relSegEnd = currentSeg ? Math.max(0, (currentSeg.end_ms - clipStartMs) / 1000) : null;
+  const relSeekTo = seekToTime !== null && seekToTime !== undefined ? Math.max(0, (seekToTime * 1000 - clipStartMs) / 1000) : null;
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 font-sans p-2 sm:p-4 flex flex-col justify-between max-w-md mx-auto relative overflow-hidden select-none">
       
@@ -621,7 +625,7 @@ function ClipBattleInner() {
         </Link>
       </div>
 
-      {/* ================= 2. パズドラ風 巨大敵ボス表示 ＆ HPバー ================= */}
+      {/* 2. 巨大敵ボス表示 ＆ HPバー */}
       {targetMonster && (
         <div className="relative bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl flex flex-col items-center space-y-2 overflow-hidden">
           
@@ -661,7 +665,7 @@ function ClipBattleInner() {
         </div>
       )}
 
-      {/* ================= 3. 味方パーティ ＆ プレイヤーHPバー ================= */}
+      {/* 3. 味方パーティ ＆ プレイヤーHPバー */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 space-y-2 shadow-xl my-2">
         <div className="flex justify-between items-center text-[10px] font-mono">
           <div className="flex items-center gap-1.5">
@@ -715,16 +719,16 @@ function ClipBattleInner() {
         </div>
       )}
 
-      {/* ================= 4. パズドラの盤面位置：動画 ＆ 穴埋め入力エリア ================= */}
+      {/* 4. 動画 ＆ 穴埋め入力エリア */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3">
         
         {signedUrl && currentSeg && (
           <ClipPlayer
             src={signedUrl}
-            seekToTime={seekToTime}
+            seekToTime={relSeekTo}
             playbackSpeed={speedParam}
-            segmentStart={(currentSeg.start_ms || 0) / 1000}
-            segmentEnd={(currentSeg.end_ms || 0) / 1000}
+            segmentStart={relSegStart}
+            segmentEnd={relSegEnd}
           />
         )}
 
@@ -816,7 +820,7 @@ function ClipBattleInner() {
 
       </div>
 
-      {/* ================= 5. ラウンド正誤判定 ＆ 構文・日本語訳解説モーダル ================= */}
+      {/* 5. ラウンド解説モーダル */}
       {isReviewModalOpen && currentSeg && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 z-50 animate-fadeIn">
           <div className="bg-slate-900 border-2 border-cyan-500/80 rounded-2xl p-4 max-w-xs sm:max-w-sm w-full space-y-3 text-white shadow-2xl font-sans max-h-[90vh] overflow-y-auto min-w-0">
