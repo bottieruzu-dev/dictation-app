@@ -1,26 +1,115 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Noto+Serf+JP:wght@500;700;900&family=Shippori+Mincho:wght@600;800&display=swap');
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* クラシックファンタジー世界観のカラーパレット */
+  --bg-deep: #0e0c13;
+  --bg-surface: #181422;
+  --parchment-bg: #e8dfcf;
+  --parchment-card: #f4eae0;
+  
+  --gold-accent: #cbb07a;
+  --gold-bright: #f3e5ab;
+  --gold-dark: #8c6e40;
+  --gold-border: #a88a53;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --text-main: #2b2118;
+  --text-muted: #6b5c4f;
+  --text-light: #e6dfd3;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* 立体感・ベベル処理 */
+  --bevel-gold: inset 0 1px 0 rgba(255, 245, 215, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.6);
+  --bevel-card: inset 0 1px 2px rgba(255, 255, 255, 0.8), inset 0 -1px 2px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-deep);
+  color: var(--text-light);
+  font-family: 'Noto Serif JP', 'Shippori Mincho', serif;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(203, 176, 122, 0.08) 0%, transparent 70%),
+    linear-gradient(to bottom, rgba(14, 12, 19, 0.8), rgba(14, 12, 19, 0.98));
+}
+
+/* 📜 羊皮紙パネルスタイル */
+.parchment-panel {
+  background: linear-gradient(135deg, #f5ebd9 0%, #e2d3be 100%);
+  color: var(--text-main);
+  border: 1px solid var(--gold-border);
+  box-shadow: var(--bevel-card);
+  position: relative;
+}
+
+/* ⚔️ ダークファンタジー枠パネル */
+.rpg-panel-dark {
+  background: linear-gradient(180deg, rgba(28, 24, 38, 0.95) 0%, rgba(18, 15, 26, 0.98) 100%);
+  border: 1px solid #3d3248;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  position: relative;
+}
+
+.rpg-panel-dark::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 1px solid rgba(203, 176, 122, 0.25);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* 👑 金彩リボンヘッダー */
+.ribbon-header {
+  background: linear-gradient(90deg, transparent 0%, #3d2f21 20%, #5e452b 50%, #3d2f21 80%, transparent 100%);
+  border-top: 1px solid var(--gold-accent);
+  border-bottom: 1px solid var(--gold-accent);
+  color: var(--gold-bright);
+  font-family: 'Cinzel', 'Shippori Mincho', serif;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+}
+
+/* 🔘 羊皮紙＆金枠ボタン */
+.btn-gold {
+  background: linear-gradient(180deg, #d8b87c 0%, #a6814a 100%);
+  color: #1a130b;
+  font-weight: 800;
+  border: 1px solid #fce8bc;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.6);
+  transition: all 0.15s ease;
+}
+
+.btn-gold:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.btn-gold:active {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+}
+
+/* 🌿 シックなダークナビボタン */
+.btn-nav-dark {
+  background: linear-gradient(180deg, #2a2236 0%, #171322 100%);
+  border: 1px solid #4a3b5c;
+  color: #d6cae3;
+  transition: all 0.15s ease;
+}
+
+.btn-nav-dark:hover {
+  border-color: var(--gold-accent);
+  color: var(--gold-bright);
+  background: linear-gradient(180deg, #372b49 0%, #211a2f 100%);
+}
+
+.btn-nav-dark.active {
+  background: linear-gradient(180deg, #614623 0%, #3a2a14 100%);
+  border-color: var(--gold-bright);
+  color: #fff2d1;
+  box-shadow: 0 0 10px rgba(203, 176, 122, 0.3);
+}
+
+/* 数値フォント設定 */
+.font-num {
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.05em;
 }
