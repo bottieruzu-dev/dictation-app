@@ -164,14 +164,20 @@ export default function MissionsPage() {
         <div className="game-panel p-4 flex items-center justify-between">
           <div>
             <h1 className="text-base font-black text-white">試練任務</h1>
-            <p className="text-[10px] text-slate-400 font-mono mt-0.5">達成してオーブ（💎）を獲得</p>
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5">達成してオーブを獲得</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="bg-[#0b1424] border border-[#2d4d7a] px-3 py-1 rounded-xl text-xs font-bold text-cyan-200 font-num">
-              💎 {orbBalance}
+            <div className="bg-[#0b1424] border border-[#2d4d7a] px-3 py-1 rounded-xl text-xs font-bold text-cyan-200 font-num flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-cyan-400 fill-current" viewBox="0 0 24 24">
+                <path d="M12 2L2 9l10 13 10-13-10-7zm0 3.2L18.6 9 12 18.2 5.4 9 12 5.2z"/>
+              </svg>
+              <span>{orbBalance}</span>
             </div>
-            <Link href="/" className="btn-game-blue text-xs px-3 py-1.5 rounded-xl">
-              ◀ ホーム
+            <Link href="/" className="btn-game-blue text-xs px-3 py-1.5 rounded-xl flex items-center gap-1">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+              </svg>
+              <span>ホーム</span>
             </Link>
           </div>
         </div>
@@ -210,8 +216,11 @@ export default function MissionsPage() {
                 <div className="space-y-1 flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-white truncate">{m.title}</span>
-                    <span className="text-[9px] font-num text-cyan-300 bg-[#091829] border border-[#1b354d] px-2 py-0.2 rounded-full shrink-0">
-                      💎 +{m.rewardOrbs}
+                    <span className="text-[9px] font-num text-cyan-300 bg-[#091829] border border-[#1b354d] px-2 py-0.2 rounded-full shrink-0 flex items-center gap-1">
+                      <svg className="w-2.5 h-2.5 text-cyan-400 fill-current" viewBox="0 0 24 24">
+                        <path d="M12 2L2 9l10 13 10-13-10-7zm0 3.2L18.6 9 12 18.2 5.4 9 12 5.2z"/>
+                      </svg>
+                      <span>+{m.rewardOrbs}</span>
                     </span>
                   </div>
 

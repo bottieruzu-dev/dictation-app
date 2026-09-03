@@ -288,7 +288,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <main className="min-h-screen pb-24 pt-4 px-3 sm:px-6">
+    <main className="min-h-screen pb-32 pt-4 px-3 sm:px-6">
       <div className="max-w-4xl mx-auto space-y-5">
         
         {/* ステータスヘッダーバー */}
@@ -303,7 +303,6 @@ export default function DashboardPage() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  {/* ★ ユーザーネーム動的反映 (エバラ固定を解消) */}
                   <h1 className="text-sm font-black text-white">{playerName}</h1>
                   <span className="text-[9px] font-num px-1.5 py-0.2 rounded bg-sky-950 text-sky-400 border border-sky-700/60 font-bold">Ver 2.0</span>
                 </div>
@@ -463,7 +462,10 @@ export default function DashboardPage() {
                           ) : (
                             <span className="absolute top-2 right-2 game-badge-yellow font-black text-[9px] font-mono px-2 py-0.5 rounded-full shadow flex items-center gap-1">
                               <span>NEW</span>
-                              <span className="text-[8px] opacity-80">(💎2)</span>
+                              <svg className="w-2.5 h-2.5 text-cyan-950 fill-current" viewBox="0 0 24 24">
+                                <path d="M12 2L2 9l10 13 10-13-10-7zm0 3.2L18.6 9 12 18.2 5.4 9 12 5.2z"/>
+                              </svg>
+                              <span>2</span>
                             </span>
                           )}
 
@@ -482,7 +484,6 @@ export default function DashboardPage() {
                             {clip.label || "無題のステージ"}
                           </Link>
                           <div className="flex gap-1 shrink-0">
-                            {/* SVG編集・削除アイコン */}
                             <button
                               onClick={() => {
                                 setEditingClip(clip);
@@ -525,7 +526,7 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="text-right font-num shrink-0 flex items-center gap-1">
-                              <svg className="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-3.5 h-3.5 text-emerald-400 fill-current" viewBox="0 0 24 24">
                                 <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                               </svg>
                               <div className="text-xs font-bold text-sky-400">{currentLuck}</div>
@@ -642,8 +643,8 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* 下部固定ゲームフッターナビゲーションバー */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-[#08101c]/95 border-t-2 border-[#1e3458] backdrop-blur-md z-40 py-2 px-3 shadow-2xl">
+      {/* ★ 下部固定ナビゲーションバー（セーフエリア・吸着補正済） */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-[#08101c] border-t-2 border-[#1e3458] backdrop-blur-md z-50 py-2 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl">
         <div className="max-w-md mx-auto grid grid-cols-6 gap-1 text-center font-bold">
           <Link href="/" className="nav-item-card active py-1.5 flex flex-col items-center justify-center gap-0.5">
             <svg className="w-4 h-4 text-sky-200" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

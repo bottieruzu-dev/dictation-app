@@ -161,13 +161,17 @@ export default function HistoryPage() {
             {attempts.length > 0 && !isReviewMode && (
               <button
                 onClick={() => { setIsReviewMode(true); setReviewCompleted(false); setRewardMsg(null); }}
-                className="btn-game-yellow text-xs px-3 py-1.5 rounded-xl font-black"
+                className="btn-game-yellow text-xs px-3 py-1.5 rounded-xl font-black flex items-center gap-1"
               >
-                復習特訓 (💎1)
+                <span>復習特訓</span>
+                <span className="text-[10px] font-mono font-bold opacity-80">(オーブ1)</span>
               </button>
             )}
-            <Link href="/" className="btn-game-blue text-xs px-3 py-1.5 rounded-xl">
-              ◀ ホーム
+            <Link href="/" className="btn-game-blue text-xs px-3 py-1.5 rounded-xl flex items-center gap-1">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+              </svg>
+              <span>ホーム</span>
             </Link>
           </div>
         </div>
@@ -219,7 +223,12 @@ export default function HistoryPage() {
 
         {/* サマリー */}
         <div className="game-panel p-3.5 space-y-2">
-          <h2 className="text-xs font-bold text-slate-300">📊 累積分析</h2>
+          <h2 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+            <svg className="w-4 h-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            <span>累積分析</span>
+          </h2>
           <div className="grid grid-cols-3 gap-2 font-num text-center text-xs">
             <div className="bg-[#09111c] p-2 rounded-xl border border-[#213757]">
               <div className="text-[8px] text-slate-400">総セッション</div>
@@ -282,7 +291,12 @@ export default function HistoryPage() {
                         onChange={() => handleToggleSelect(att.id)}
                         className="w-3.5 h-3.5 rounded accent-sky-500"
                       />
-                      <span>📅 {new Date(att.created_at).toLocaleString()}</span>
+                      <span className="flex items-center gap-1">
+                        <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        {new Date(att.created_at).toLocaleString()}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2">

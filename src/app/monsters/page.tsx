@@ -64,8 +64,11 @@ export default function MonstersPage() {
             </span>
             <h1 className="text-base font-black text-white">モンスター図鑑</h1>
           </div>
-          <Link href="/" className="btn-game-blue text-xs px-3 py-1.5 rounded-xl">
-            ◀ ホーム
+          <Link href="/" className="btn-game-blue text-xs px-3 py-1.5 rounded-xl flex items-center gap-1">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            <span>ホーム</span>
           </Link>
         </div>
 
@@ -98,8 +101,11 @@ export default function MonstersPage() {
                     </div>
 
                     {isOwned && (
-                      <div className="absolute bottom-1 right-1 bg-black/80 text-sky-300 font-num text-[8px] font-bold px-1.5 py-0.2 rounded border border-sky-500/40">
-                        ☘️ {luck}
+                      <div className="absolute bottom-1 right-1 bg-black/80 text-sky-300 font-num text-[8px] font-bold px-1.5 py-0.2 rounded border border-sky-500/40 flex items-center gap-0.5">
+                        <svg className="w-2.5 h-2.5 text-emerald-400 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                        </svg>
+                        <span>{luck}</span>
                       </div>
                     )}
                   </div>

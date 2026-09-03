@@ -27,7 +27,7 @@ interface Monster {
 function PartyInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const fromClip = searchParams.get("fromClip"); // 出撃元クリップID
+  const fromClip = searchParams.get("fromClip");
 
   const [ownedMonsters, setOwnedMonsters] = useState<Monster[]>([]);
   const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
@@ -129,7 +129,7 @@ function PartyInner() {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      setMessage("🚨 ログインが必要です");
+      setMessage("ログインが必要です");
       setSaving(false);
       return;
     }
@@ -137,32 +137,29 @@ function PartyInner() {
     try {
       await supabase.from("party").delete().eq("owner_id", user.id);
 
-      const inserts = partySlots
-        .map((m, idx) => {
-          if (!m) return null;
-          return {
-            owner_id: user.id,
-            slot: idx + 1,
-            monster_id: m.id,
-          };
-        })
-        .filter(Boolean);
+      // flatMap を使用して型推論から null を完全に排除
+      const inserts = partySlots.flatMap((m, idx) =>
+        m ? [{
+          owner_id: user.id,
+          slot: idx + 1,
+          monster_id: m.id,
+        }] : []
+      );
 
       if (inserts.length > 0) {
         await supabase.from("party").insert(inserts);
       }
 
-      // ★ 出撃元クリップID（fromClip）がある場合は、保存後にすぐ出撃画面へ復帰！
       if (fromClip) {
-        setMessage("🎉 編成を保存しました！出撃画面へ戻ります...");
+        setMessage("パーティを保存しました。出撃画面へ遷移します...");
         setTimeout(() => {
           router.push(`/clips/${fromClip}/prepare`);
         }, 600);
       } else {
-        setMessage("🎉 パーティ編成を保存しました！");
+        setMessage("パーティ編成を保存しました。");
       }
     } catch (err: any) {
-      setMessage(`🚨 エラー: ${err.message}`);
+      setMessage(`エラー: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -193,37 +190,38 @@ function PartyInner() {
       gut: gutSum,
       xpMult: Math.min(2.5, 1.0 + intSum * 0.0008).toFixed(2),
       earDropBonus: Math.min(20.0, earSum * 0.006).toFixed(1),
-      vocHints: Math.min(5, Math.floor(vocSum / 400)),
-      focComboGrace: Math.min(3, Math.floor(focSum / 700)),
-      lukGachaBonus: Math.min(3.0, lukSum * 0.0012).toFixed(2),
-      gutShields: Math.min(3, Math.floor(gutSum / 900)),
     };
   };
 
   const stats = calculateTotalStats();
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white py-8">
-      <div className="max-w-4xl mx-auto px-4 space-y-6">
+    <main className="min-h-screen pb-20 pt-4 px-3 sm:px-6">
+      <div className="max-w-4xl mx-auto space-y-4">
         
-        <div className="flex items-center justify-between border-b border-gray-800 pb-4">
-          <div>
-            <h1 className="text-2xl font-black">⚔️ パーティ編成</h1>
-            <p className="text-xs text-gray-400 mt-1">
-              {fromClip ? "出撃デッキを設定して「保存して出撃画面へ戻る」を押してください" : "下のモンスターをドロップ領域へドラッグ＆ドロップして編成できます"}
-            </p>
+        <div className="game-panel p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-sky-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <div>
+              <h1 className="text-base font-black text-white">パーティ編成</h1>
+              <p className="text-[10px] text-slate-400 font-mono mt-0.5">スロットへドラッグ＆ドロップして配置します</p>
+            </div>
           </div>
-          {/* ★ キャンセル/戻る先を出撃画面へ動的変更 */}
           <Link
             href={fromClip ? `/clips/${fromClip}/prepare` : "/"}
-            className="px-3 py-1.5 bg-gray-800 text-gray-200 font-bold text-xs rounded-lg hover:bg-gray-700 transition-colors"
+            className="btn-game-blue text-xs px-3 py-1.5 rounded-xl flex items-center gap-1"
           >
-            {fromClip ? "← 出撃確認へ戻る" : "← ダッシュボード"}
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            <span>{fromClip ? "出撃確認" : "ホーム"}</span>
           </Link>
         </div>
 
-        {/* 1. スロット編成（ドロップターゲット領域） */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* スロット */}
+        <div className="grid grid-cols-3 gap-2">
           {[0, 1, 2].map((slotIdx) => {
             const m = partySlots[slotIdx];
             const luck = m && m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 0;
@@ -238,39 +236,43 @@ function PartyInner() {
                 }}
                 onDragLeave={() => setDragOverSlot(null)}
                 onDrop={() => handleDrop(slotIdx)}
-                className={`bg-gray-900 border rounded-2xl p-4 flex flex-col justify-between space-y-3 relative shadow-lg transition-all ${
-                  isOver ? "border-cyan-400 ring-4 ring-cyan-500/30 scale-[1.02]" : "border-gray-800"
+                className={`game-panel p-3 text-center space-y-1.5 flex flex-col justify-between ${
+                  isOver ? "border-sky-400 ring-2 ring-sky-500/40" : ""
                 }`}
               >
-                <div className="flex justify-between items-center text-xs font-bold font-mono text-gray-400">
-                  <span>SLOT #{slotIdx + 1} {slotIdx === 0 && "👑(リーダー)"}</span>
+                <div className="flex justify-between items-center text-[9px] font-mono text-slate-400">
+                  <span>SLOT #{slotIdx + 1}</span>
+                  {slotIdx === 0 && (
+                    <span className="flex items-center gap-0.5 text-amber-400 font-bold">
+                      <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                        <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/>
+                      </svg>
+                      <span>リーダー</span>
+                    </span>
+                  )}
                   {m && (
-                    <button
-                      onClick={() => handleClearSlot(slotIdx)}
-                      className="text-red-400 hover:text-red-300 text-[10px]"
-                    >
-                      外す ✕
-                    </button>
+                    <button onClick={() => handleClearSlot(slotIdx)} className="text-red-400 hover:text-red-300">✕</button>
                   )}
                 </div>
 
                 {m ? (
-                  <div className="space-y-2 text-center py-2">
-                    <img
-                      src={m.image_url}
-                      alt={m.name}
-                      className="w-24 h-24 object-cover rounded-xl mx-auto border-2 border-indigo-500 shadow-md pointer-events-none"
-                    />
-                    <div>
-                      <div className="text-xs text-amber-400 font-bold">{"★".repeat(m.rarity)}</div>
-                      <div className="text-sm font-black">{m.name}</div>
-                      <div className="text-[10px] text-blue-400 font-mono mt-0.5">☘️ ラック: {luck}</div>
+                  <div className="space-y-1 py-1">
+                    <img src={m.image_url} alt={m.name} className="w-14 h-14 object-cover rounded-lg mx-auto border border-[#2a4870]" />
+                    <div className="text-[9px] text-amber-400 font-num">{"★".repeat(m.rarity)}</div>
+                    <div className="text-xs font-bold text-white truncate">{m.name}</div>
+                    <div className="text-[9px] text-sky-400 font-num flex items-center justify-center gap-0.5">
+                      <svg className="w-2.5 h-2.5 text-emerald-400 fill-current" viewBox="0 0 24 24">
+                        <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                      </svg>
+                      <span>ラック: {luck}</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="py-10 text-center text-gray-500 border-2 border-dashed border-gray-800 rounded-xl space-y-1">
-                    <div className="text-2xl">🎯</div>
-                    <div className="text-xs font-bold">ここにドラッグ＆ドロップ</div>
+                  <div className="py-6 border-2 border-dashed border-[#213757] rounded-xl flex flex-col items-center justify-center gap-1 text-[10px] text-slate-500 font-mono">
+                    <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0-4c-3.866 0-7 3.134-7 7s3.134 7 7 7 7-3.134 7-7-3.134-7-7-7z"/>
+                    </svg>
+                    <span>未配置</span>
                   </div>
                 )}
               </div>
@@ -278,128 +280,97 @@ function PartyInner() {
           })}
         </div>
 
-        {/* 保存ボタン */}
-        <div className="flex flex-col items-center gap-2">
-          {message && (
-            <div className="p-2.5 bg-indigo-950 border border-indigo-800 text-indigo-300 text-xs font-bold rounded-lg text-center w-full max-w-md animate-pulse">
-              {message}
-            </div>
-          )}
+        {message && (
+          <div className="p-2 bg-[#091524] border border-[#1b3652] text-sky-300 text-xs font-bold rounded-xl text-center">
+            {message}
+          </div>
+        )}
 
-          <button
-            onClick={handleSaveParty}
-            disabled={saving}
-            className="w-full max-w-md py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 text-white font-black text-sm rounded-xl shadow-lg disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-          >
-            <span>💾 {fromClip ? "保存して出撃画面へ戻る" : "パーティ編成を保存する"}</span>
-          </button>
-        </div>
+        <button
+          onClick={handleSaveParty}
+          disabled={saving}
+          className="w-full py-3 btn-game-yellow text-xs font-black rounded-xl shadow flex items-center justify-center gap-1.5"
+        >
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+          </svg>
+          <span>{fromClip ? "保存して出撃準備へ" : "パーティ編成を保存する"}</span>
+        </button>
 
-        {/* 2. 合計ステータス表示 */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-          <h2 className="text-sm font-bold text-gray-300 border-b border-gray-800 pb-2">
-            📊 パーティ合計ステータス & 発動効果
+        {/* 合計ステータス */}
+        <div className="game-panel p-3.5 space-y-2">
+          <h2 className="text-xs font-bold text-slate-300 border-b border-[#213757] pb-1 flex items-center gap-1.5">
+            <svg className="w-4 h-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            <span>合計ステータス</span>
           </h2>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
-            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
-              <span className="text-gray-400 block text-[10px]">知力 (INT)</span>
-              <span className="text-lg font-black text-blue-400">{stats.int}</span>
-              <span className="text-[10px] text-gray-400 block mt-1">獲得XP: {stats.xpMult}倍</span>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-num">
+            <div className="bg-[#09111c] p-2 rounded-lg border border-[#213757]">
+              <span className="text-slate-400 text-[9px] block">INT (知力)</span>
+              <span className="text-sm font-bold text-sky-400">{stats.int}</span>
             </div>
-
-            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
-              <span className="text-gray-400 block text-[10px]">聴力 (EAR)</span>
-              <span className="text-lg font-black text-green-400">{stats.ear}</span>
-              <span className="text-[10px] text-gray-400 block mt-1">ドロップ加算: +{stats.earDropBonus}pt</span>
+            <div className="bg-[#09111c] p-2 rounded-lg border border-[#213757]">
+              <span className="text-slate-400 text-[9px] block">EAR (聴力)</span>
+              <span className="text-sm font-bold text-emerald-400">{stats.ear}</span>
             </div>
-
-            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
-              <span className="text-gray-400 block text-[10px]">語彙 (VOC)</span>
-              <span className="text-lg font-black text-purple-400">{stats.voc}</span>
-              <span className="text-[10px] text-gray-400 block mt-1">ヒント可能回数: {stats.vocHints}回</span>
-            </div>
-
-            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
-              <span className="text-gray-400 block text-[10px]">集中 (FOC)</span>
-              <span className="text-lg font-black text-amber-400">{stats.foc}</span>
-              <span className="text-[10px] text-gray-400 block mt-1">ミス許容回数: {stats.focComboGrace}回</span>
-            </div>
-
-            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
-              <span className="text-gray-400 block text-[10px]">幸運 (LUK)</span>
-              <span className="text-lg font-black text-yellow-400">{stats.luk}</span>
-              <span className="text-[10px] text-gray-400 block mt-1">ガチャ★4加算: +{stats.lukGachaBonus}pt</span>
-            </div>
-
-            <div className="bg-gray-950 p-3 rounded-xl border border-gray-800">
-              <span className="text-gray-400 block text-[10px]">胆力 (GUT)</span>
-              <span className="text-lg font-black text-red-400">{stats.gut}</span>
-              <span className="text-[10px] text-gray-400 block mt-1">月間ストリーク保護: {stats.gutShields}回</span>
+            <div className="bg-[#09111c] p-2 rounded-lg border border-[#213757]">
+              <span className="text-slate-400 text-[9px] block">VOC (語彙)</span>
+              <span className="text-sm font-bold text-purple-400">{stats.voc}</span>
             </div>
           </div>
         </div>
 
-        {/* 3. 所持モンスター一覧 */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
-          <h2 className="text-sm font-bold text-gray-300">
-            所持モンスター一覧 (ドラッグしてスロットへ配置)
-          </h2>
+        {/* 所持一覧 */}
+        <div className="game-panel p-3.5 space-y-2">
+          <h2 className="text-xs font-bold text-slate-300">所持モンスター一覧</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {ownedMonsters.map((m) => {
+              const luck = m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 1;
+              const setSlotIdx = partySlots.findIndex((s) => s?.id === m.id);
 
-          {loading ? (
-            <p className="text-xs text-gray-500 text-center py-6">読み込み中...</p>
-          ) : ownedMonsters.length === 0 ? (
-            <p className="text-xs text-gray-500 text-center py-6">
-              所持しているモンスターがいません。「召喚（ガチャ）」でモンスターを獲得しましょう。
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {ownedMonsters.map((m) => {
-                const luck = m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 1;
-                const setSlotIdx = partySlots.findIndex((s) => s?.id === m.id);
-
-                return (
-                  <div
-                    key={m.id}
-                    draggable
-                    onDragStart={() => setDraggedMonster(m)}
-                    onDragEnd={() => setDraggedMonster(null)}
-                    className={`bg-gray-950 border rounded-xl p-3 space-y-2 relative transition-all cursor-grab active:cursor-grabbing select-none ${
-                      setSlotIdx !== -1 ? "border-indigo-500 ring-2 ring-indigo-500/30 opacity-70" : "border-gray-800 hover:border-cyan-500 hover:scale-105"
-                    }`}
-                  >
-                    {setSlotIdx !== -1 && (
-                      <span className="absolute top-2 left-2 bg-indigo-600 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded">
-                        SLOT #{setSlotIdx + 1}
-                      </span>
-                    )}
-
-                    <img src={m.image_url} alt={m.name} className="w-16 h-16 object-cover rounded-lg mx-auto border border-gray-800 pointer-events-none" />
-
-                    <div className="text-center">
-                      <div className="text-[10px] text-amber-400">{"★".repeat(m.rarity)}</div>
-                      <div className="text-xs font-bold truncate">{m.name}</div>
-                      <div className="text-[10px] text-blue-400 font-mono">☘️ {luck}</div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1 pt-1">
-                      {[0, 1, 2].map((sIdx) => (
-                        <button
-                          key={sIdx}
-                          onClick={() => handleSelectMonster(m, sIdx)}
-                          className={`py-1 text-[9px] font-bold rounded ${
-                            setSlotIdx === sIdx ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-                          }`}
-                        >
-                          #{sIdx + 1}
-                        </button>
-                      ))}
+              return (
+                <div
+                  key={m.id}
+                  draggable
+                  onDragStart={() => setDraggedMonster(m)}
+                  onDragEnd={() => setDraggedMonster(null)}
+                  className={`bg-[#0a1220] border rounded-xl p-2 space-y-1 relative select-none cursor-grab active:cursor-grabbing ${
+                    setSlotIdx !== -1 ? "border-sky-500 opacity-60" : "border-[#213757] hover:border-sky-400"
+                  }`}
+                >
+                  {setSlotIdx !== -1 && (
+                    <span className="absolute top-1.5 left-1.5 bg-sky-600 text-white font-num text-[8px] font-bold px-1 rounded">
+                      SLOT #{setSlotIdx + 1}
+                    </span>
+                  )}
+                  <img src={m.image_url} alt={m.name} className="w-12 h-12 object-cover rounded-lg mx-auto border border-[#1b2d47]" />
+                  <div className="text-center">
+                    <div className="text-xs font-bold truncate text-white">{m.name}</div>
+                    <div className="text-[9px] text-sky-400 font-num flex items-center justify-center gap-0.5">
+                      <svg className="w-2.5 h-2.5 text-emerald-400 fill-current" viewBox="0 0 24 24">
+                        <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                      </svg>
+                      <span>ラック: {luck}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  <div className="grid grid-cols-3 gap-1 pt-1">
+                    {[0, 1, 2].map((sIdx) => (
+                      <button
+                        key={sIdx}
+                        onClick={() => handleSelectMonster(m, sIdx)}
+                        className={`py-0.5 text-[8px] font-bold rounded ${
+                          setSlotIdx === sIdx ? "bg-sky-600 text-white" : "bg-[#14233f] text-slate-300"
+                        }`}
+                      >
+                        #{sIdx + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
       </div>
@@ -409,7 +380,7 @@ function PartyInner() {
 
 export default function PartyPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-950 text-white p-8 text-center text-sm font-mono">読み込み中...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#070c17] text-slate-400 p-8 text-center text-xs font-mono">LOADING...</div>}>
       <PartyInner />
     </Suspense>
   );

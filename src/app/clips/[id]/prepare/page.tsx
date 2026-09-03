@@ -156,8 +156,11 @@ export default function PreparePage() {
       <div className="max-w-md mx-auto space-y-4">
         
         <div className="game-panel p-3.5 flex items-center justify-between">
-          <Link href="/" className="text-xs text-slate-400 hover:text-white font-bold">
-            ◀ キャンセル
+          <Link href="/" className="text-xs text-slate-400 hover:text-white font-bold flex items-center gap-1">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            <span>キャンセル</span>
           </Link>
           <span className="text-xs font-bold text-sky-400 uppercase font-num">
             STAGE SELECT
@@ -199,8 +202,11 @@ export default function PreparePage() {
         {/* 速度 ＆ 倍率 */}
         <div className="game-panel p-3.5 space-y-2.5">
           <div className="flex justify-between items-center border-b border-[#213757] pb-1.5">
-            <span className="text-xs font-bold text-sky-300 font-num">
-              ⚡ 再生速度 ＆ ドロップ倍率
+            <span className="text-xs font-bold text-sky-300 font-num flex items-center gap-1">
+              <svg className="w-4 h-4 text-amber-400 fill-current" viewBox="0 0 24 24">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+              <span>再生速度 ＆ ドロップ倍率</span>
             </span>
             <span className="text-xs font-bold font-num text-amber-300">
               ×{dropMult.toFixed(2)}
@@ -264,7 +270,12 @@ export default function PreparePage() {
                       <img src={m.image_url} alt={m.name} className="w-12 h-12 object-cover rounded-lg mx-auto border border-[#2a4870]" />
                       <div className="text-[9px] text-amber-400 font-num">{"★".repeat(m.rarity)}</div>
                       <div className="text-[10px] font-bold truncate text-white">{m.name}</div>
-                      <div className="text-[8px] text-sky-300 font-num">☘️ {luck}</div>
+                      <div className="text-[8px] text-sky-300 font-num flex items-center justify-center gap-0.5">
+                        <svg className="w-2.5 h-2.5 text-emerald-400 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                        </svg>
+                        <span>{luck}</span>
+                      </div>
                     </>
                   ) : (
                     <div className="py-5 text-slate-600 text-[10px] font-mono">未設定</div>
@@ -277,9 +288,13 @@ export default function PreparePage() {
 
         <button
           onClick={() => router.push(`/clips/${id}?speed=${speed}`)}
-          className="w-full py-3.5 btn-game-yellow text-sm font-black rounded-2xl shadow uppercase tracking-wider"
+          className="w-full py-3.5 btn-game-yellow text-sm font-black rounded-2xl shadow uppercase tracking-wider flex items-center justify-center gap-1.5"
         >
-          ⚔️ 試練開始
+          <svg className="w-4 h-4 text-slate-900 fill-current" viewBox="0 0 24 24">
+            <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+            <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span>試練開始</span>
         </button>
 
       </div>
