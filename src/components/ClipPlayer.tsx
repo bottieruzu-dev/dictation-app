@@ -78,6 +78,19 @@ export default function ClipPlayer({
     }
   };
 
+  // 動画が完全終端(ended)まで再生された場合のループ補正
+  const handleEnded = () => {
+    const { start } = rangeRef.current;
+    if (start !== null) {
+      safeSeek(start);
+      const v = videoRef.current;
+      if (v) {
+        void v.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    }
+  };
+
   // 厳密なループチェック
   const checkAndLoop = () => {
     const v = videoRef.current;
@@ -108,14 +121,16 @@ export default function ClipPlayer({
     const { start, end } = rangeRef.current;
     if (!v) return;
 
-    if (isPlaying) {
+    if (isPlaying && !v.paused) {
       v.pause();
       setIsPlaying(false);
     } else {
+      // 停止状態・ended状態・または範囲外にいる場合は確実に現在のラウンド先頭へ移動してから再生
       if (
         start !== null &&
-        end !== null &&
-        (v.currentTime >= end || v.currentTime < start - 0.5)
+        (v.ended ||
+          (end !== null && v.currentTime >= end - 0.1) ||
+          v.currentTime < start - 0.3)
       ) {
         safeSeek(start);
       }
@@ -135,6 +150,7 @@ export default function ClipPlayer({
         playsInline
         preload="auto"
         onLoadedMetadata={handleLoadedMetadata}
+        onEnded={handleEnded}
         onTimeUpdate={checkAndLoop}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
