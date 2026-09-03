@@ -53,6 +53,7 @@ export default function DashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
 
+  const [playerName, setPlayerName] = useState<string>("Takumi");
   const [videos, setVideos] = useState<Video[]>([]);
   const [clips, setClips] = useState<Clip[]>([]);
   const [totalStorageBytes, setTotalStorageBytes] = useState(0);
@@ -82,6 +83,18 @@ export default function DashboardPage() {
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (prof?.display_name) {
+        setPlayerName(prof.display_name);
+      }
+    }
 
     const { data: orbRes, error: orbErr } = await supabase.rpc("ensure_initial_orbs");
     if (!orbErr && orbRes !== null) {
@@ -290,7 +303,8 @@ export default function DashboardPage() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-sm font-black text-white">エバラ</h1>
+                  {/* ★ ユーザーネーム動的反映 (エバラ固定を解消) */}
+                  <h1 className="text-sm font-black text-white">{playerName}</h1>
                   <span className="text-[9px] font-num px-1.5 py-0.2 rounded bg-sky-950 text-sky-400 border border-sky-700/60 font-bold">Ver 2.0</span>
                 </div>
                 <div className="w-28 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-700 mt-1">
@@ -299,7 +313,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* ゲーム内通貨・リソースバー */}
+            {/* 通貨・リソースバー */}
             <div className="flex items-center gap-2 font-num">
               <div className="bg-[#0b1424] border border-[#2d4d7a] px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-inner">
                 <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
@@ -447,8 +461,9 @@ export default function DashboardPage() {
                               CLEAR
                             </span>
                           ) : (
-                            <span className="absolute top-2 right-2 game-badge-yellow font-black text-[9px] font-mono px-2 py-0.5 rounded-full shadow">
-                              NEW (💎2)
+                            <span className="absolute top-2 right-2 game-badge-yellow font-black text-[9px] font-mono px-2 py-0.5 rounded-full shadow flex items-center gap-1">
+                              <span>NEW</span>
+                              <span className="text-[8px] opacity-80">(💎2)</span>
                             </span>
                           )}
 
@@ -467,21 +482,26 @@ export default function DashboardPage() {
                             {clip.label || "無題のステージ"}
                           </Link>
                           <div className="flex gap-1 shrink-0">
+                            {/* SVG編集・削除アイコン */}
                             <button
                               onClick={() => {
                                 setEditingClip(clip);
                                 setEditLabel(clip.label || "");
                                 setEditTags((clip.tags || []).join(", "));
                               }}
-                              className="text-xs text-slate-400 hover:text-white p-1"
+                              className="text-slate-400 hover:text-white p-1"
                             >
-                              ✏️
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                              </svg>
                             </button>
                             <button
                               onClick={() => handleDeleteClip(clip.id)}
-                              className="text-xs text-slate-400 hover:text-red-400 p-1"
+                              className="text-slate-400 hover:text-red-400 p-1"
                             >
-                              🗑️
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                              </svg>
                             </button>
                           </div>
                         </div>
@@ -504,8 +524,11 @@ export default function DashboardPage() {
                               </div>
                             </div>
 
-                            <div className="text-right font-num shrink-0">
-                              <div className="text-xs font-bold text-sky-400">☘️ {currentLuck}</div>
+                            <div className="text-right font-num shrink-0 flex items-center gap-1">
+                              <svg className="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                              </svg>
+                              <div className="text-xs font-bold text-sky-400">{currentLuck}</div>
                             </div>
                           </div>
                         ) : (
@@ -619,10 +642,9 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* 下部固定ゲームフッターナビゲーションバー (ロマンス導線を配置) */}
+      {/* 下部固定ゲームフッターナビゲーションバー */}
       <footer className="fixed bottom-0 left-0 right-0 bg-[#08101c]/95 border-t-2 border-[#1e3458] backdrop-blur-md z-40 py-2 px-3 shadow-2xl">
         <div className="max-w-md mx-auto grid grid-cols-6 gap-1 text-center font-bold">
-          {/* ホーム (アクティブ) */}
           <Link href="/" className="nav-item-card active py-1.5 flex flex-col items-center justify-center gap-0.5">
             <svg className="w-4 h-4 text-sky-200" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
@@ -630,15 +652,13 @@ export default function DashboardPage() {
             <span className="text-[8px] text-white">ホーム</span>
           </Link>
 
-          {/* 遠征（ロマンス） */}
           <Link href="/romance" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
-            <svg className="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h1.5a2.5 2.5 0 002.5-2.5V7a2 2 0 00-2-2h-1.5a2 2 0 01-2-2V3.055"/>
+            <svg className="w-4 h-4 text-pink-400" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
             </svg>
             <span className="text-[8px] text-slate-300">遠征</span>
           </Link>
 
-          {/* 任務 */}
           <Link href="/missions" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
             <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -646,7 +666,6 @@ export default function DashboardPage() {
             <span className="text-[8px] text-slate-300">任務</span>
           </Link>
 
-          {/* 図鑑 */}
           <Link href="/monsters" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
             <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
@@ -654,7 +673,6 @@ export default function DashboardPage() {
             <span className="text-[8px] text-slate-300">図鑑</span>
           </Link>
 
-          {/* 召喚 */}
           <button onClick={() => setIsGachaOpen(true)} className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
             <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L5.605 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
@@ -662,7 +680,6 @@ export default function DashboardPage() {
             <span className="text-[8px] text-slate-300">召喚</span>
           </button>
 
-          {/* 編成 */}
           <Link href="/party" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
             <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>

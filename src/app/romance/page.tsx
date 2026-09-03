@@ -245,9 +245,12 @@ export default function RomancePage() {
                 <h1 className="text-base font-black text-white">WORLD ROMANCE</h1>
                 <button
                   onClick={() => { setNewNameInput(displayName); setIsEditingName(true); }}
-                  className="text-[9px] bg-pink-950 text-pink-300 border border-pink-700/60 px-2 py-0.5 rounded-full hover:bg-pink-900"
+                  className="text-[9px] bg-pink-950 text-pink-300 border border-pink-700/60 px-2 py-0.5 rounded-full hover:bg-pink-900 flex items-center gap-1"
                 >
-                  {displayName} ✏️
+                  <span>{displayName}</span>
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                  </svg>
                 </button>
               </div>
               <p className="text-[10px] text-slate-400 font-mono">世界のヒロインと交流し親愛度を高めるモード</p>
@@ -269,7 +272,12 @@ export default function RomancePage() {
         {/* 国選択エリア */}
         <section className="game-panel p-3.5 space-y-3">
           <div className="flex justify-between items-center border-b border-[#213757] pb-2 text-xs font-bold text-slate-300">
-            <span>🗺️ MAP (解放国: {unlockedCountriesCount} / {countries.length})</span>
+            <span className="flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h1.5a2.5 2.5 0 002.5-2.5V7a2 2 0 00-2-2h-1.5a2 2 0 01-2-2V3.055"/>
+              </svg>
+              MAP (解放国: {unlockedCountriesCount} / {countries.length})
+            </span>
             <span className="text-[10px] text-slate-400 font-mono">図鑑所持: {ownedMonstersCount} 体</span>
           </div>
 
@@ -346,7 +354,7 @@ export default function RomancePage() {
 
                       {isUnlocked ? (
                         <div className="absolute top-1 left-1 bg-black/80 text-pink-400 text-[8px] font-bold font-num px-1.5 py-0.2 rounded border border-pink-500/40">
-                          Lv.{affection} {affection === 5 && "👑"}
+                          Lv.{affection} {affection === 5 && "MAX"}
                         </div>
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/60 font-mono text-[9px] text-pink-300 font-bold">
@@ -406,9 +414,12 @@ export default function RomancePage() {
                           <span>HER INNER THOUGHTS</span>
                           <button
                             onClick={() => triggerRandomThought(activeHeroine, affection)}
-                            className="text-slate-400 hover:text-white"
+                            className="text-slate-400 hover:text-white flex items-center gap-1"
                           >
-                            🔄 更新
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            更新
                           </button>
                         </div>
                         <p className="text-xs font-mono text-slate-200 italic leading-relaxed pt-0.5">
@@ -438,7 +449,7 @@ export default function RomancePage() {
                         </button>
                       ) : (
                         <div className="text-center py-2 bg-pink-950/40 border border-pink-500/50 rounded-xl text-pink-300 font-bold text-xs font-num">
-                          👑 MAX (Lv.5)
+                          MAX (Lv.5)
                         </div>
                       )}
                     </div>

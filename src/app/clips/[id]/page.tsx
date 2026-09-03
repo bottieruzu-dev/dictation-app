@@ -105,7 +105,6 @@ function ClipBattleInner() {
   const [comboCount, setComboCount] = useState(0);
   const [activeSegIndex, setActiveSegIndex] = useState(0);
   const [isAwakened, setIsAwakened] = useState(false);
-  const [clearedWaves, setClearedWaves] = useState<Record<string, boolean>>({});
 
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; score: number; answer: string }>>({});
@@ -176,14 +175,13 @@ function ClipBattleInner() {
         }
         setTargetMonster(boss);
 
-        // 難易度ティアごとの敵ステータス調整倍率（プレイヤーの総ダメージ量に合わせて大幅調整）
         const tier = clipData.difficulty_tier || '中級';
         const dScore = clipData.difficulty_score || 50;
 
         const tierMultMap: Record<string, { hp: number; atk: number }> = {
           '初級': { hp: 0.08, atk: 0.15 },
           '中級': { hp: 0.18, atk: 0.25 },
-          '上級': { hp: 0.30, atk: 0.40 },  // 👈 HP 1,500〜2,100前後に抑え、★2パーティで撃破可能化
+          '上級': { hp: 0.30, atk: 0.40 },
           '超上級': { hp: 0.65, atk: 0.80 },
           '超絶': { hp: 1.20, atk: 1.20 },
         };
@@ -309,7 +307,7 @@ function ClipBattleInner() {
         if (!newAnswers[key] || newAnswers[key].trim().toLowerCase() !== targetAns.toLowerCase()) {
           newAnswers[key] = targetAns;
           effectApplied = true;
-          setSkillMessage(`⚡【${pm.monster.name}】のスキルで空欄1つ完全回答！`);
+          setSkillMessage(`【${pm.monster.name}】のスキルで空欄1つ完全回答！`);
           break;
         }
       }
@@ -324,7 +322,7 @@ function ClipBattleInner() {
           effectApplied = true;
         }
       }
-      setSkillMessage(`⚡【${pm.monster.name}】のスキルで頭文字を解放！`);
+      setSkillMessage(`【${pm.monster.name}】のスキルで頭文字を解放！`);
     }
 
     if (effectApplied) {
@@ -365,7 +363,6 @@ function ClipBattleInner() {
     }
 
     setResults(newResults);
-    setClearedWaves((prev) => ({ ...prev, [currentSeg.id]: true }));
 
     const roundAccuracy = targetCount > 0 ? correctCount / targetCount : 1.0;
     const leaderElem = partyMonsters[0]?.monster.element;
@@ -458,9 +455,9 @@ function ClipBattleInner() {
     }
 
     if (savedCount > 0) {
-      setSaveMessage(`💾 ${savedCount} 件の間違いをノートに保存しました！`);
+      setSaveMessage(`${savedCount} 件の間違いをノートに保存しました。`);
     } else {
-      setSaveMessage('🎉 全問正解です！保存する誤答はありません。');
+      setSaveMessage('全問正解です。保存する誤答はありません。');
     }
   };
 
@@ -597,23 +594,23 @@ function ClipBattleInner() {
 
   if (signedIn === false) {
     return (
-      <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-16 p-6 space-y-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl text-white">
+      <form onSubmit={handleSignIn} className="max-w-sm mx-auto my-16 p-6 space-y-4 game-panel text-white">
         <h2 className="text-xl font-black text-center tracking-wide">PLAYER LOGIN</h2>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm focus:border-cyan-500 focus:outline-none" required />
-        <button className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 text-white py-3 rounded-xl font-black text-sm shadow-lg transition-all">ログイン</button>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="メールアドレス" className="w-full bg-[#0a121e] border border-[#273e63] rounded-xl px-3.5 py-2.5 text-sm focus:border-sky-400 focus:outline-none" required />
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="パスワード" className="w-full bg-[#0a121e] border border-[#273e63] rounded-xl px-3.5 py-2.5 text-sm focus:border-sky-400 focus:outline-none" required />
+        <button className="w-full btn-game-yellow py-3 text-xs font-black">ログイン</button>
         {authError && <p className="text-red-400 text-xs text-center font-mono">{authError}</p>}
       </form>
     );
   }
 
-  if (loading) return <div className="min-h-screen bg-slate-950 text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>;
+  if (loading) return <div className="min-h-screen bg-[#070c17] text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>;
 
   if (errorMsg) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white p-8 flex flex-col items-center justify-center space-y-4 text-center">
+      <div className="min-h-screen bg-[#070c17] text-white p-8 flex flex-col items-center justify-center space-y-4 text-center">
         <p className="text-sm text-red-400 font-mono">{errorMsg}</p>
-        <Link href="/" className="px-4 py-2 bg-slate-800 text-cyan-400 rounded-xl text-xs font-bold">
+        <Link href="/" className="btn-game-blue px-4 py-2 text-xs font-bold">
           ◀ ダッシュボードに戻る
         </Link>
       </div>
@@ -628,24 +625,24 @@ function ClipBattleInner() {
   const relSeekTo = seekToTime !== null && seekToTime !== undefined ? Math.max(0, (seekToTime * 1000 - clipStartMs) / 1000) : null;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans p-2 sm:p-4 flex flex-col justify-between max-w-md mx-auto relative overflow-hidden select-none">
+    <main className="min-h-screen bg-[#070c17] text-slate-100 font-sans p-2 sm:p-4 flex flex-col justify-between max-w-md mx-auto relative overflow-hidden select-none">
       
       {/* 1. ヘッダー */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
+      <div className="flex items-center justify-between border-b border-[#213757] pb-1.5 mb-2">
         <h1 className="text-xs font-black text-white truncate max-w-[200px]">
           {clip?.label || 'ダンジョン'}
         </h1>
-        <Link href={`/clips/${id}/prepare`} className="text-[10px] text-cyan-400 font-bold hover:underline">
+        <Link href={`/clips/${id}/prepare`} className="text-[10px] text-sky-400 font-bold hover:underline">
           ◀ 撤退
         </Link>
       </div>
 
-      {/* 2. 巨大敵ボス表示 ＆ HPバー */}
+      {/* 2. 敵ボス表示 ＆ HPバー */}
       {targetMonster && (
-        <div className="relative bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl flex flex-col items-center space-y-2 overflow-hidden">
+        <div className="relative game-panel p-3 flex flex-col items-center space-y-2 overflow-hidden">
           
           {isAttackingAnim && (
-            <div className="absolute inset-0 bg-cyan-400/40 backdrop-blur-[1px] z-30 flex items-center justify-center animate-ping" />
+            <div className="absolute inset-0 bg-sky-400/40 backdrop-blur-[1px] z-30 flex items-center justify-center animate-ping" />
           )}
 
           {damagePopup !== null && (
@@ -654,14 +651,14 @@ function ClipBattleInner() {
             </div>
           )}
 
-          <div className="relative w-36 h-36 bg-slate-950 rounded-2xl overflow-hidden border-2 border-red-500/50 shadow-xl my-0.5">
+          <div className="relative w-36 h-36 bg-[#08101c] rounded-2xl overflow-hidden border-2 border-red-500/50 shadow-xl my-0.5">
             <img
               src={targetMonster.image_url}
               alt=""
               className={`w-full h-full object-cover object-top transition-all duration-300 ${isAttackingAnim ? "scale-95 filter brightness-150" : ""}`}
             />
             <div className="absolute top-1.5 right-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 shadow">
-              {targetMonster.element} {isAwakened && "🔥AWAKENED"}
+              {targetMonster.element} {isAwakened && "AWAKENED"}
             </div>
           </div>
 
@@ -670,7 +667,7 @@ function ClipBattleInner() {
               <span>BOSS HP</span>
               <span className="text-red-400 font-bold">{bossHp} / {bossMaxHp}</span>
             </div>
-            <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+            <div className="w-full h-2.5 bg-[#08101c] rounded-full overflow-hidden border border-[#213757]">
               <div
                 className="h-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 transition-all duration-300"
                 style={{ width: `${Math.max(0, (bossHp / bossMaxHp) * 100)}%` }}
@@ -681,10 +678,10 @@ function ClipBattleInner() {
       )}
 
       {/* 3. 味方パーティ ＆ プレイヤーHPバー */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 space-y-2 shadow-xl my-2">
+      <div className="game-panel p-2.5 space-y-2 my-2">
         <div className="flex justify-between items-center text-[10px] font-mono">
           <div className="flex items-center gap-1.5">
-            <span className="font-bold text-cyan-300">⚔️ 味方パーティ</span>
+            <span className="font-bold text-sky-300">味方パーティ</span>
             {comboCount > 0 && (
               <span className="bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.2 rounded-full animate-bounce">
                 {comboCount} COMBO!
@@ -693,11 +690,11 @@ function ClipBattleInner() {
           </div>
           <div>
             <span className="text-slate-400">HP: </span>
-            <strong className="text-green-400">{playerHp} / {playerMaxHp}</strong>
+            <strong className="text-emerald-400">{playerHp} / {playerMaxHp}</strong>
           </div>
         </div>
 
-        <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+        <div className="w-full h-2 bg-[#08101c] rounded-full overflow-hidden border border-[#213757]">
           <div
             className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-300"
             style={{ width: `${Math.max(0, (playerHp / playerMaxHp) * 100)}%` }}
@@ -712,14 +709,14 @@ function ClipBattleInner() {
               onClick={() => handleActivateMonsterSkill(p.slot)}
               className={`p-1.5 rounded-xl border text-center transition-all flex items-center gap-1.5 ${
                 p.used
-                  ? "bg-slate-950 border-slate-800 opacity-40 grayscale cursor-not-allowed"
-                  : "bg-indigo-950/80 border-indigo-600 hover:border-cyan-400 active:scale-95 cursor-pointer shadow"
+                  ? "bg-[#09111c] border-slate-800 opacity-40 grayscale cursor-not-allowed"
+                  : "bg-[#101d36] border-[#25426b] hover:border-sky-400 active:scale-95 cursor-pointer shadow"
               }`}
             >
-              <img src={p.monster?.image_url} alt="" className="w-8 h-8 object-cover rounded-lg border border-indigo-500/40 shrink-0" />
+              <img src={p.monster?.image_url} alt="" className="w-8 h-8 object-cover rounded-lg border border-[#2b4b7a] shrink-0" />
               <div className="text-left min-w-0 flex-1">
                 <div className="text-[9px] font-bold text-slate-200 truncate">{p.monster?.name}</div>
-                <div className={`text-[8px] font-black px-1 py-0.2 rounded inline-block ${p.used ? "bg-slate-800 text-slate-500" : "bg-cyan-500 text-black"}`}>
+                <div className={`text-[8px] font-black px-1 py-0.2 rounded inline-block ${p.used ? "bg-slate-800 text-slate-500" : "bg-sky-500 text-black"}`}>
                   {p.used ? "USED" : "SKILL"}
                 </div>
               </div>
@@ -729,13 +726,13 @@ function ClipBattleInner() {
       </div>
 
       {skillMessage && (
-        <div className="p-1.5 bg-cyan-950 border border-cyan-500/50 text-cyan-200 text-[10px] font-black rounded-xl text-center animate-bounce shadow">
+        <div className="p-1.5 bg-[#0a1e33] border border-sky-500/50 text-sky-200 text-[10px] font-black rounded-xl text-center animate-bounce shadow">
           {skillMessage}
         </div>
       )}
 
       {/* 4. 動画 ＆ 穴埋め入力エリア */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-3">
+      <div className="game-panel p-3 space-y-3">
         
         {signedUrl && currentSeg && (
           <ClipPlayer
@@ -749,8 +746,8 @@ function ClipBattleInner() {
 
         {!isAwakened && currentSeg && (
           <div className="space-y-3">
-            <div className="flex justify-between items-center text-xs font-mono border-b border-slate-800 pb-1.5">
-              <span className="bg-cyan-500 text-black font-black px-2 py-0.5 rounded-full text-[10px]">
+            <div className="flex justify-between items-center text-xs font-mono border-b border-[#213757] pb-1.5">
+              <span className="bg-sky-500 text-black font-black px-2 py-0.5 rounded-full text-[10px]">
                 WAVE #{ (activeSegIndex + 1).toString().padStart(2, '0') } / { segments.length }
               </span>
               <span className="text-[10px] text-slate-400 font-mono">
@@ -779,7 +776,7 @@ function ClipBattleInner() {
                           onKeyDown={(e) => { if (e.key === 'Enter') handleAttackRound(); }}
                           placeholder="---"
                           className={`w-20 border-b-2 px-1 py-0.5 text-center text-xs font-black font-mono focus:outline-none transition-colors ${
-                            res ? (res.isCorrect ? 'border-green-500 bg-green-950 text-green-300' : 'border-red-500 bg-red-950 text-red-300') : 'border-cyan-500 bg-slate-950 text-white'
+                            res ? (res.isCorrect ? 'border-emerald-500 bg-emerald-950 text-emerald-300' : 'border-red-500 bg-red-950 text-red-300') : 'border-sky-500 bg-[#09111c] text-white'
                           }`}
                         />
                         {hintCharges > 0 && !res && (
@@ -788,12 +785,12 @@ function ClipBattleInner() {
                             className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow"
                             title="ヒント"
                           >
-                            💡
+                            H
                           </button>
                         )}
                       </div>
                       {res && (
-                        <span className={`text-[9px] font-bold ${res.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                        <span className={`text-[9px] font-bold ${res.isCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
                           {res.isCorrect ? '○' : `× ${res.answer}`}
                         </span>
                       )}
@@ -811,9 +808,9 @@ function ClipBattleInner() {
 
             <button
               onClick={handleAttackRound}
-              className="w-full py-2.5 bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-lg border border-orange-400/30 transition-all uppercase tracking-widest flex items-center justify-center gap-1"
+              className="w-full py-2.5 btn-game-yellow text-xs font-black rounded-xl uppercase tracking-widest flex items-center justify-center gap-1"
             >
-              <span>⚔️ 攻 撃 (回答判定 / Enter)</span>
+              <span>回答判定 / Enter</span>
             </button>
           </div>
         )}
@@ -821,14 +818,14 @@ function ClipBattleInner() {
         {isAwakened && (
           <div className="text-center space-y-2 py-2">
             <span className="bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase animate-bounce inline-block">
-              🔥 FINAL WAVE - BOSS AWAKENED
+              FINAL WAVE - BOSS AWAKENED
             </span>
             <button
               onClick={handleFinalAttack}
               disabled={isSubmittingSession}
-              className="w-full py-3 bg-gradient-to-r from-red-600 via-purple-600 to-indigo-600 hover:opacity-95 active:translate-y-0.5 text-white font-black text-xs rounded-xl shadow-xl border border-red-400/30 transition-all uppercase tracking-widest"
+              className="w-full py-3 btn-game-yellow text-xs font-black rounded-xl uppercase tracking-widest"
             >
-              <span>🔥 ト ー タ ル ア タ ッ ク （最終判定）</span>
+              <span>ト ー タ ル ア タ ッ ク （最終判定）</span>
             </button>
           </div>
         )}
@@ -838,15 +835,15 @@ function ClipBattleInner() {
       {/* 5. ラウンド解説モーダル */}
       {isReviewModalOpen && currentSeg && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 z-50 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-cyan-500/80 rounded-2xl p-4 max-w-xs sm:max-w-sm w-full space-y-3 text-white shadow-2xl font-sans max-h-[90vh] overflow-y-auto min-w-0">
-            <div className="text-center space-y-1 border-b border-slate-800 pb-2">
-              <span className="bg-cyan-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+          <div className="game-panel p-4 max-w-xs sm:max-w-sm w-full space-y-3 text-white shadow-2xl font-sans max-h-[90vh] overflow-y-auto min-w-0">
+            <div className="text-center space-y-1 border-b border-[#213757] pb-2">
+              <span className="bg-sky-500 text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
                 ROUND #{activeSegIndex + 1} RESULT
               </span>
               <h3 className="text-sm font-black text-white">ラウンド結果 ＆ 解説</h3>
             </div>
 
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs font-bold leading-relaxed text-slate-200 flex flex-wrap gap-1 items-center font-mono w-full min-w-0 break-words">
+            <div className="bg-[#08101c] p-3 rounded-xl border border-[#213757] text-xs font-bold leading-relaxed text-slate-200 flex flex-wrap gap-1 items-center font-mono w-full min-w-0 break-words">
               { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
                 const segItems = clozeItems.filter((it) => it.segment_id === currentSeg.id);
                 const item = segItems.find((it) => it.word_from === wIdx);
@@ -856,7 +853,7 @@ function ClipBattleInner() {
 
                 if (isTarget && res) {
                   return (
-                    <span key={wIdx} className={`px-1 py-0.5 rounded font-black border text-[11px] inline-block break-all ${res.isCorrect ? 'text-green-400 bg-green-950/80 border-green-800' : 'text-red-400 bg-red-950/80 border-red-800 underline'}`}>
+                    <span key={wIdx} className={`px-1 py-0.5 rounded font-black border text-[11px] inline-block break-all ${res.isCorrect ? 'text-emerald-400 bg-emerald-950/80 border-emerald-800' : 'text-red-400 bg-red-950/80 border-red-800 underline'}`}>
                       {res.answer}
                     </span>
                   );
@@ -866,14 +863,14 @@ function ClipBattleInner() {
             </div>
 
             {currentSeg.ja_text && (
-              <div className="bg-slate-800/50 text-slate-200 p-2.5 rounded-xl text-xs leading-relaxed border border-slate-700 break-words">
-                <span className="text-amber-400 font-bold mr-1">💡 訳:</span> 
+              <div className="bg-[#0d1726] text-slate-200 p-2.5 rounded-xl text-xs leading-relaxed border border-[#213757] break-words">
+                <span className="text-amber-400 font-bold mr-1">訳:</span> 
                 {currentSeg.ja_text}
               </div>
             )}
 
-            <div className="bg-slate-950 p-2.5 rounded-xl space-y-1.5 border border-slate-800 text-xs font-mono max-h-32 overflow-y-auto break-all min-w-0">
-              <div className="text-[10px] text-slate-400 font-bold border-b border-slate-800 pb-1">
+            <div className="bg-[#08101c] p-2.5 rounded-xl space-y-1.5 border border-[#213757] text-xs font-mono max-h-32 overflow-y-auto break-all min-w-0">
+              <div className="text-[10px] text-slate-400 font-bold border-b border-[#213757] pb-1">
                 【単語入力チェック】
               </div>
               { (currentSeg.corrected_text || currentSeg.text).split(' ').map((word, wIdx) => {
@@ -890,7 +887,7 @@ function ClipBattleInner() {
                     <span className="text-slate-400 shrink-0">#Word {wIdx + 1}:</span>
                     {res ? (
                       res.isCorrect ? (
-                        <span className="text-green-400 font-bold break-all text-right">○ {res.answer}</span>
+                        <span className="text-emerald-400 font-bold break-all text-right">○ {res.answer}</span>
                       ) : (
                         <span className="text-red-400 font-bold break-all text-right">
                           × {userAnswers[key] || "（未入力）"} ➔ <u className="underline">{res.answer}</u>
@@ -905,15 +902,15 @@ function ClipBattleInner() {
             {currentSeg.skeletons && currentSeg.skeletons.length > 0 && (
               <div className="space-y-1">
                 {currentSeg.skeletons.map((sk, idx) => (
-                  <div key={idx} className="bg-blue-950/80 text-blue-300 p-2 rounded-lg font-mono text-[10px] break-words">
-                    💡 構文: <strong>{sk.text}</strong> ({sk.label})
+                  <div key={idx} className="bg-[#0b1c30] text-sky-300 p-2 rounded-lg font-mono text-[10px] break-words border border-sky-800/40">
+                    構文: <strong>{sk.text}</strong> ({sk.label})
                   </div>
                 ))}
               </div>
             )}
 
             {saveMessage && (
-              <p className="text-[10px] text-cyan-300 font-mono text-center bg-cyan-950 p-2 rounded-lg border border-cyan-800 break-words">
+              <p className="text-[10px] text-sky-300 font-mono text-center bg-[#0b1c30] p-2 rounded-lg border border-sky-800 break-words">
                 {saveMessage}
               </p>
             )}
@@ -923,11 +920,11 @@ function ClipBattleInner() {
                 onClick={handleSaveMistakes}
                 className="flex-1 py-2.5 bg-purple-900/80 hover:bg-purple-800 text-purple-200 font-bold text-xs rounded-xl border border-purple-600 transition-colors"
               >
-                💾 ノート保存
+                ノート保存
               </button>
               <button
                 onClick={handleProceedNextRound}
-                className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-90 text-white font-black text-xs rounded-xl shadow-lg transition-all"
+                className="flex-1 py-2.5 btn-game-blue text-xs font-bold rounded-xl"
               >
                 次へ進む ➔
               </button>
@@ -936,12 +933,11 @@ function ClipBattleInner() {
         </div>
       )}
 
-      {/* 💎 コンティニューモーダル */}
+      {/* コンティニューモーダル */}
       {isContinueModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-red-500 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
-            <div className="text-2xl animate-bounce">💀</div>
-            <h3 className="text-base font-black text-red-400">プレイヤー全滅...</h3>
+          <div className="game-panel border-2 border-red-500 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
+            <h3 className="text-base font-black text-red-400">プレイヤー全滅</h3>
             <p className="text-xs text-slate-300 font-mono">
               HPが0になりました。オーブ1個でHP全回復して復活しますか？
             </p>
@@ -949,7 +945,7 @@ function ClipBattleInner() {
               <button onClick={() => { setIsContinueModalOpen(false); setIsGameOverModalOpen(true); }} className="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs font-bold">
                 あきらめる
               </button>
-              <button onClick={handleContinue} className="flex-1 py-2 bg-cyan-600 text-white font-black text-xs rounded-xl shadow">
+              <button onClick={handleContinue} className="flex-1 py-2 btn-game-yellow text-xs font-bold rounded-xl">
                 💎 復活する
               </button>
             </div>
@@ -957,36 +953,34 @@ function ClipBattleInner() {
         </div>
       )}
 
-      {/* 🚨 ゲームオーバーモーダル */}
+      {/* ゲームオーバーモーダル */}
       {isGameOverModalOpen && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-xs w-full text-center space-y-3 text-white">
-            <div className="text-2xl">💦</div>
+          <div className="game-panel p-5 max-w-xs w-full text-center space-y-3 text-white">
             <h3 className="text-base font-black text-slate-300">GAME OVER</h3>
             <p className="text-xs text-slate-400 font-mono">ボスを撃破できませんでした。</p>
-            <button onClick={() => router.push(`/clips/${id}/prepare`)} className="w-full py-2 bg-slate-800 text-white rounded-xl text-xs font-bold">
+            <button onClick={() => router.push(`/clips/${id}/prepare`)} className="w-full py-2 btn-game-blue text-xs font-bold rounded-xl">
               出撃準備へ戻る
             </button>
           </div>
         </div>
       )}
 
-      {/* 🏆 クエストクリア */}
+      {/* クエストクリア */}
       {dropResult && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-slate-900 border-2 border-emerald-500 text-white p-5 rounded-2xl max-w-xs w-full text-center space-y-3 shadow-2xl">
-            <div className="text-2xl animate-bounce">🏆</div>
+          <div className="game-panel border-2 border-emerald-500 text-white p-5 rounded-2xl max-w-xs w-full text-center space-y-3 shadow-2xl">
             <h3 className="text-base font-black text-emerald-400">QUEST CLEAR!</h3>
             {dropResult.isDropped ? (
               <div className="space-y-2">
                 <img src={dropResult.monster.image_url} alt="" className="w-20 h-20 object-cover rounded-2xl mx-auto border-2 border-emerald-400 shadow" />
                 <div className="text-xs font-black">{dropResult.monster.name} GET!</div>
-                <div className="text-[10px] text-cyan-400 font-mono">☘️ ラック {dropResult.newLuck}</div>
+                <div className="text-[10px] text-sky-400 font-mono">ラック {dropResult.newLuck}</div>
               </div>
             ) : (
               <p className="text-xs text-slate-400 font-mono">ドロップならず... (確率: {dropResult.dropRateUsed}%)</p>
             )}
-            <button onClick={() => router.push(`/clips/${id}/prepare`)} className="w-full py-2 bg-emerald-600 text-white rounded-xl text-xs font-black">
+            <button onClick={() => router.push(`/clips/${id}/prepare`)} className="w-full py-2 btn-game-yellow text-xs font-black rounded-xl">
               確認画面へ戻る
             </button>
           </div>
@@ -999,7 +993,7 @@ function ClipBattleInner() {
 
 export default function ClipPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#070c17] text-slate-400 p-8 text-center text-xs font-mono">LOADING BATTLE HUD...</div>}>
       <ClipBattleInner />
     </Suspense>
   );
