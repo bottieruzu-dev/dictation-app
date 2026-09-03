@@ -1,115 +1,132 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Noto+Serf+JP:wght@500;700;900&family=Shippori+Mincho:wght@600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800;900&family=Chakra+Petch:wght@600;700&display=swap');
 
 :root {
-  /* クラシックファンタジー世界観のカラーパレット */
-  --bg-deep: #0e0c13;
-  --bg-surface: #181422;
-  --parchment-bg: #e8dfcf;
-  --parchment-card: #f4eae0;
-  
-  --gold-accent: #cbb07a;
-  --gold-bright: #f3e5ab;
-  --gold-dark: #8c6e40;
-  --gold-border: #a88a53;
+  /* カジュアルRPG風 ディープブルー・ネイビー系パレット */
+  --game-bg-main: #0c1527;
+  --game-bg-dark: #070c17;
+  --game-surface: #15233e;
+  --game-panel-bg: linear-gradient(180deg, #1b2d4b 0%, #111e36 100%);
+  --game-card-bg: linear-gradient(180deg, #1f3458 0%, #152441 100%);
 
-  --text-main: #2b2118;
-  --text-muted: #6b5c4f;
-  --text-light: #e6dfd3;
+  /* ボーダー・フレームカラー */
+  --border-blue-bright: #388bfd;
+  --border-cyan-glow: #22d3ee;
+  --border-panel: #28416c;
 
-  /* 立体感・ベベル処理 */
-  --bevel-gold: inset 0 1px 0 rgba(255, 245, 215, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.6);
-  --bevel-card: inset 0 1px 2px rgba(255, 255, 255, 0.8), inset 0 -1px 2px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.2);
+  /* アクセントカラー */
+  --accent-yellow: #fbbf24;
+  --accent-orange: #f97316;
+  --accent-green: #22c55e;
+  --accent-red: #ef4444;
+
+  /* ベベル・内陰影・立体フレーム */
+  --game-inset-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), inset 0 -1px 2px rgba(255, 255, 255, 0.1);
+  --game-plate-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.4), 0 4px 10px rgba(0, 0, 0, 0.5);
+  --game-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 3px 6px rgba(0, 0, 0, 0.4);
 }
 
 body {
-  background-color: var(--bg-deep);
-  color: var(--text-light);
-  font-family: 'Noto Serif JP', 'Shippori Mincho', serif;
+  background-color: var(--game-bg-dark);
+  color: #f1f5f9;
+  font-family: 'M PLUS Rounded 1c', sans-serif;
   background-image: 
-    radial-gradient(circle at 50% 0%, rgba(203, 176, 122, 0.08) 0%, transparent 70%),
-    linear-gradient(to bottom, rgba(14, 12, 19, 0.8), rgba(14, 12, 19, 0.98));
+    radial-gradient(circle at 50% 0%, #1e3a5f 0%, transparent 60%),
+    linear-gradient(to bottom, #0c1527 0%, #060a14 100%);
+  min-height: 100vh;
 }
 
-/* 📜 羊皮紙パネルスタイル */
-.parchment-panel {
-  background: linear-gradient(135deg, #f5ebd9 0%, #e2d3be 100%);
-  color: var(--text-main);
-  border: 1px solid var(--gold-border);
-  box-shadow: var(--bevel-card);
+/* 🎮 ゲーム風フレームパネル */
+.game-panel {
+  background: var(--game-panel-bg);
+  border: 2px solid var(--border-panel);
+  border-radius: 16px;
+  box-shadow: var(--game-plate-bevel);
   position: relative;
 }
 
-/* ⚔️ ダークファンタジー枠パネル */
-.rpg-panel-dark {
-  background: linear-gradient(180deg, rgba(28, 24, 38, 0.95) 0%, rgba(18, 15, 26, 0.98) 100%);
-  border: 1px solid #3d3248;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
-  position: relative;
+.game-panel-header {
+  background: linear-gradient(90deg, #1d355a 0%, #294873 50%, #1d355a 100%);
+  border-bottom: 2px solid #375b8a;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  padding: 8px 16px;
 }
 
-.rpg-panel-dark::before {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border: 1px solid rgba(203, 176, 122, 0.25);
-  pointer-events: none;
-  border-radius: inherit;
-}
-
-/* 👑 金彩リボンヘッダー */
-.ribbon-header {
-  background: linear-gradient(90deg, transparent 0%, #3d2f21 20%, #5e452b 50%, #3d2f21 80%, transparent 100%);
-  border-top: 1px solid var(--gold-accent);
-  border-bottom: 1px solid var(--gold-accent);
-  color: var(--gold-bright);
-  font-family: 'Cinzel', 'Shippori Mincho', serif;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-}
-
-/* 🔘 羊皮紙＆金枠ボタン */
-.btn-gold {
-  background: linear-gradient(180deg, #d8b87c 0%, #a6814a 100%);
-  color: #1a130b;
+/* 🏆 ゲーム風バッジ・プレート */
+.game-badge-yellow {
+  background: linear-gradient(180deg, #fef08a 0%, #f59e0b 100%);
+  color: #451a03;
   font-weight: 800;
-  border: 1px solid #fce8bc;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.6);
-  transition: all 0.15s ease;
+  border: 1px solid #fef08a;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-.btn-gold:hover {
+.game-badge-blue {
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  color: #0c4a6e;
+  font-weight: 800;
+  border: 1px solid #7dd3fc;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* ⚔️ 立体的なアクティブボタン */
+.btn-game-yellow {
+  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+  color: #1e1b4b;
+  font-weight: 900;
+  border: 1.5px solid #fef08a;
+  box-shadow: var(--game-button-shadow);
+  border-radius: 12px;
+  transition: all 0.1s ease;
+}
+
+.btn-game-yellow:hover {
   filter: brightness(1.1);
   transform: translateY(-1px);
 }
 
-.btn-gold:active {
+.btn-game-yellow:active {
   transform: translateY(1px);
   filter: brightness(0.95);
 }
 
-/* 🌿 シックなダークナビボタン */
-.btn-nav-dark {
-  background: linear-gradient(180deg, #2a2236 0%, #171322 100%);
-  border: 1px solid #4a3b5c;
-  color: #d6cae3;
+.btn-game-blue {
+  background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  font-weight: 800;
+  border: 1.5px solid #38bdf8;
+  box-shadow: var(--game-button-shadow);
+  border-radius: 12px;
+  transition: all 0.1s ease;
+}
+
+.btn-game-blue:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+/* 📱 下部固定ナビゲーション風ボタン */
+.nav-item-card {
+  background: linear-gradient(180deg, #1d3356 0%, #12213d 100%);
+  border: 1.5px solid #2d4d7a;
+  border-radius: 12px;
   transition: all 0.15s ease;
+  position: relative;
 }
 
-.btn-nav-dark:hover {
-  border-color: var(--gold-accent);
-  color: var(--gold-bright);
-  background: linear-gradient(180deg, #372b49 0%, #211a2f 100%);
+.nav-item-card:hover {
+  border-color: #38bdf8;
+  background: linear-gradient(180deg, #254473 0%, #172c4e 100%);
+  transform: translateY(-2px);
 }
 
-.btn-nav-dark.active {
-  background: linear-gradient(180deg, #614623 0%, #3a2a14 100%);
-  border-color: var(--gold-bright);
-  color: #fff2d1;
-  box-shadow: 0 0 10px rgba(203, 176, 122, 0.3);
+.nav-item-card.active {
+  background: linear-gradient(180deg, #0284c7 0%, #075985 100%);
+  border-color: #7dd3fc;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
 }
 
-/* 数値フォント設定 */
 .font-num {
-  font-family: 'Cinzel', serif;
-  letter-spacing: 0.05em;
+  font-family: 'Chakra Petch', sans-serif;
 }
