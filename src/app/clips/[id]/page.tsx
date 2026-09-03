@@ -176,19 +176,19 @@ function ClipBattleInner() {
         }
         setTargetMonster(boss);
 
-        // 難易度ティアごとの敵ステータス調整倍率（上級以下をマイルド化）
+        // 難易度ティアごとの敵ステータス調整倍率（プレイヤーの総ダメージ量に合わせて大幅調整）
         const tier = clipData.difficulty_tier || '中級';
         const dScore = clipData.difficulty_score || 50;
 
         const tierMultMap: Record<string, { hp: number; atk: number }> = {
-          '初級': { hp: 0.15, atk: 0.2 },
-          '中級': { hp: 0.35, atk: 0.35 },
-          '上級': { hp: 0.60, atk: 0.5 },
-          '超上級': { hp: 1.0, atk: 1.0 },
-          '超絶': { hp: 1.6, atk: 1.5 },
+          '初級': { hp: 0.08, atk: 0.15 },
+          '中級': { hp: 0.18, atk: 0.25 },
+          '上級': { hp: 0.30, atk: 0.40 },  // 👈 HP 1,500〜2,100前後に抑え、★2パーティで撃破可能化
+          '超上級': { hp: 0.65, atk: 0.80 },
+          '超絶': { hp: 1.20, atk: 1.20 },
         };
 
-        const mult = tierMultMap[tier] || { hp: 0.5, atk: 0.5 };
+        const mult = tierMultMap[tier] || { hp: 0.30, atk: 0.40 };
         const baseHp = dScore * 100 + (boss?.rarity || 1) * 500;
         const baseAtk = dScore * 1.2 + (boss?.rarity || 1) * 20;
 
