@@ -278,11 +278,10 @@ export default function DashboardPage() {
     <main className="min-h-screen pb-24 pt-4 px-3 sm:px-6">
       <div className="max-w-4xl mx-auto space-y-5">
         
-        {/* 🎮 ゲーム特有のステータスヘッダーバー (参考画像1/2準拠) */}
+        {/* ステータスヘッダーバー */}
         <header className="game-panel p-3.5 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             
-            {/* プレイヤープロフ */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-sky-400 to-indigo-600 p-0.5 shadow-md flex items-center justify-center shrink-0">
                 <div className="w-full h-full bg-[#0a1220] rounded-[10px] flex items-center justify-center font-num text-xs font-black text-sky-300">
@@ -300,9 +299,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* ゲーム内通貨・リソースバー（専用アイコン配置） */}
+            {/* ゲーム内通貨・リソースバー */}
             <div className="flex items-center gap-2 font-num">
-              {/* ダイヤ（オーブ） */}
               <div className="bg-[#0b1424] border border-[#2d4d7a] px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-inner">
                 <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2L2 9l10 13 10-13-10-7zm0 3.2L18.6 9 12 18.2 5.4 9 12 5.2z"/>
@@ -310,7 +308,6 @@ export default function DashboardPage() {
                 <div className="text-xs font-bold text-cyan-200">{orbCount}</div>
               </div>
 
-              {/* ストレージ */}
               <div className="bg-[#0b1424] border border-[#2d4d7a] px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-inner">
                 <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
@@ -319,9 +316,31 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* クイックナビ */}
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5 pt-2 border-t border-[#213757]">
+            <Link href="/romance" className="btn-game-blue text-[11px] py-1.5 text-center flex items-center justify-center gap-1">
+              遠征 (ロマンス)
+            </Link>
+            <Link href="/missions" className="bg-[#12233f] border border-[#29456e] text-slate-200 hover:text-white text-[11px] py-1.5 rounded-lg text-center">
+              任務
+            </Link>
+            <Link href="/party" className="bg-[#12233f] border border-[#29456e] text-slate-200 hover:text-white text-[11px] py-1.5 rounded-lg text-center">
+              編成
+            </Link>
+            <button onClick={() => setIsGachaOpen(true)} className="bg-[#12233f] border border-[#29456e] text-slate-200 hover:text-white text-[11px] py-1.5 rounded-lg text-center">
+              召喚
+            </button>
+            <Link href="/monsters" className="bg-[#12233f] border border-[#29456e] text-slate-200 hover:text-white text-[11px] py-1.5 rounded-lg text-center">
+              図鑑
+            </Link>
+            <Link href="/history" className="bg-[#12233f] border border-[#29456e] text-slate-200 hover:text-white text-[11px] py-1.5 rounded-lg text-center">
+              鍛錬手記
+            </Link>
+          </div>
         </header>
 
-        {/* 📹 新規インジェスト入力枠 */}
+        {/* 新規インジェスト入力枠 */}
         <section className="game-panel p-3.5 space-y-2">
           <div className="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
             <svg className="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -353,7 +372,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* 🔍 検索 ＆ タブ切替 */}
+        {/* 検索 ＆ タブ切替 */}
         <div className="space-y-2.5">
           <input
             type="text"
@@ -387,7 +406,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ⚔️ クエストステージカード一覧（参考画像2のChallengeカード枠準拠） */}
+        {/* クエストステージカード一覧 */}
         {activeTab === "clips" && (
           <section>
             {loading ? (
@@ -411,7 +430,6 @@ export default function DashboardPage() {
                       className="game-panel rounded-2xl overflow-hidden p-3 space-y-3 flex flex-col justify-between"
                     >
                       <div className="space-y-2.5">
-                        {/* 上部：サムネイル ＆ 難易度バッジ */}
                         <div className="aspect-video bg-[#070d17] rounded-xl overflow-hidden relative border border-[#233a5e]">
                           {thumbUrl ? (
                             <img
@@ -441,7 +459,6 @@ export default function DashboardPage() {
                           )}
                         </div>
 
-                        {/* ステージ名 */}
                         <div className="flex justify-between items-start gap-2">
                           <Link
                             href={`/clips/${clip.id}/prepare`}
@@ -469,7 +486,6 @@ export default function DashboardPage() {
                           </div>
                         </div>
 
-                        {/* ターゲットモンスター（ドロップ対象） */}
                         {mon ? (
                           <div className="bg-[#0e1829] border border-[#213757] p-2 rounded-xl flex items-center justify-between gap-2 shadow-inner">
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -513,7 +529,7 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* 📹 動画原本一覧 */}
+        {/* 動画原本一覧 */}
         {activeTab === "videos" && (
           <section>
             {loading ? (
@@ -603,47 +619,55 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* 📱 下部固定ゲームフッターナビゲーションバー（参考画像1/2の完全再現） */}
+      {/* 下部固定ゲームフッターナビゲーションバー (ロマンス導線を配置) */}
       <footer className="fixed bottom-0 left-0 right-0 bg-[#08101c]/95 border-t-2 border-[#1e3458] backdrop-blur-md z-40 py-2 px-3 shadow-2xl">
-        <div className="max-w-md mx-auto grid grid-cols-5 gap-1.5 text-center font-bold">
-          {/* 図鑑 */}
-          <Link href="/monsters" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
-            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+        <div className="max-w-md mx-auto grid grid-cols-6 gap-1 text-center font-bold">
+          {/* ホーム (アクティブ) */}
+          <Link href="/" className="nav-item-card active py-1.5 flex flex-col items-center justify-center gap-0.5">
+            <svg className="w-4 h-4 text-sky-200" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
             </svg>
-            <span className="text-[9px] text-slate-300">図鑑</span>
+            <span className="text-[8px] text-white">ホーム</span>
+          </Link>
+
+          {/* 遠征（ロマンス） */}
+          <Link href="/romance" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
+            <svg className="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 002 2h1.5a2.5 2.5 0 002.5-2.5V7a2 2 0 00-2-2h-1.5a2 2 0 01-2-2V3.055"/>
+            </svg>
+            <span className="text-[8px] text-slate-300">遠征</span>
           </Link>
 
           {/* 任務 */}
           <Link href="/missions" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
-            <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            <span className="text-[9px] text-slate-300">任務</span>
+            <span className="text-[8px] text-slate-300">任務</span>
           </Link>
 
-          {/* ホーム (アクティブ) */}
-          <Link href="/" className="nav-item-card active py-1.5 flex flex-col items-center justify-center gap-0.5">
-            <svg className="w-5 h-5 text-sky-200" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          {/* 図鑑 */}
+          <Link href="/monsters" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
+            <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
             </svg>
-            <span className="text-[9px] text-white">ホーム</span>
+            <span className="text-[8px] text-slate-300">図鑑</span>
           </Link>
 
           {/* 召喚 */}
           <button onClick={() => setIsGachaOpen(true)} className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
-            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L5.605 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
             </svg>
-            <span className="text-[9px] text-slate-300">召喚</span>
+            <span className="text-[8px] text-slate-300">召喚</span>
           </button>
 
           {/* 編成 */}
           <Link href="/party" className="nav-item-card py-1.5 flex flex-col items-center justify-center gap-0.5">
-            <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
             </svg>
-            <span className="text-[9px] text-slate-300">編成</span>
+            <span className="text-[8px] text-slate-300">編成</span>
           </Link>
         </div>
       </footer>

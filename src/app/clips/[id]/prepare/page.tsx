@@ -41,7 +41,6 @@ export default function PreparePage() {
   const [partySlots, setPartySlots] = useState<(Monster | null)[]>([null, null, null]);
   const [loading, setLoading] = useState(true);
 
-  // 再生速度 (0.5x ～ 2.0x)
   const [speed, setSpeed] = useState<number>(1.0);
 
   const supabase = createClient();
@@ -55,7 +54,6 @@ export default function PreparePage() {
     return 1.0;
   };
 
-  // ドロップ倍率計算: 1.0x -> x1.0, 0.6x -> x0.2, 1.5x -> x2.0
   const getDropMultiplier = (spd: number) => {
     const mult = 1.0 + (spd - 1.0) * 2.0;
     return Math.max(0.1, parseFloat(mult.toFixed(2)));
@@ -148,78 +146,72 @@ export default function PreparePage() {
   const dropMult = getDropMultiplier(speed);
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-950 text-white p-8 text-center text-sm font-mono">出撃データを確認中...</div>;
+    return <div className="min-h-screen bg-[#070c17] text-slate-400 p-8 text-center text-xs font-mono">LOADING PREPARE DATA...</div>;
   }
 
   const targetMon = clip?.monsters;
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white py-8">
-      <div className="max-w-md mx-auto px-4 space-y-5">
+    <main className="min-h-screen pb-20 pt-4 px-3 sm:px-6">
+      <div className="max-w-md mx-auto space-y-4">
         
-        {/* 上部ヘッダー */}
-        <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-          <Link href="/" className="text-xs text-gray-400 hover:text-white font-bold">
-            ← キャンセル
+        <div className="game-panel p-3.5 flex items-center justify-between">
+          <Link href="/" className="text-xs text-slate-400 hover:text-white font-bold">
+            ◀ キャンセル
           </Link>
-          <span className="text-xs font-black tracking-widest text-cyan-400 uppercase font-mono">
+          <span className="text-xs font-bold text-sky-400 uppercase font-num">
             STAGE SELECT
           </span>
-          <div className="w-12"></div>
+          <div className="w-10"></div>
         </div>
 
-        {/* クエスト情報カード */}
-        <div className="bg-gradient-to-b from-gray-900 to-gray-950 border-2 border-indigo-600 rounded-2xl p-4 shadow-xl space-y-3 relative overflow-hidden">
-          <div className="flex justify-between items-start border-b border-gray-800 pb-2">
+        {/* クエスト情報 */}
+        <div className="game-panel p-4 space-y-3">
+          <div className="flex justify-between items-start border-b border-[#213757] pb-2">
             <div>
-              <span className="bg-red-600 text-white font-black px-2.5 py-0.5 rounded text-[10px] uppercase tracking-wider">
+              <span className="bg-[#182b47] text-sky-300 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-[#2b4973]">
                 {clip?.difficulty_tier || '中級'} (SCORE: {clip?.difficulty_score ?? 0})
               </span>
-              <h2 className="text-base font-black text-white mt-1.5 line-clamp-1">
-                {clip?.label || 'ディクテーションクエスト'}
+              <h2 className="text-base font-bold text-white mt-1.5 line-clamp-1">
+                {clip?.label || 'ステージ'}
               </h2>
             </div>
           </div>
 
-          {/* ドロップターゲット枠 */}
           {targetMon ? (
-            <div className="bg-gray-900 p-2.5 rounded-xl border border-gray-800 flex items-center justify-between">
+            <div className="bg-[#09111c] p-2.5 rounded-xl border border-[#213757] flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <img src={targetMon.image_url} alt={targetMon.name} className="w-12 h-12 object-cover rounded-lg border border-amber-500/50 shadow" />
+                <img src={targetMon.image_url} alt={targetMon.name} className="w-10 h-10 object-cover rounded-lg border border-[#2a4870]" />
                 <div>
-                  <div className="text-[10px] text-amber-400 font-bold">ドロップターゲット {"★".repeat(targetMon.rarity)}</div>
-                  <div className="text-xs font-black text-white">{targetMon.name}</div>
+                  <div className="text-[9px] text-amber-400 font-bold font-num">{"★".repeat(targetMon.rarity)}</div>
+                  <div className="text-xs font-bold text-white">{targetMon.name}</div>
                 </div>
               </div>
-              <div className="text-right text-[10px] text-cyan-300 font-mono font-bold">
-                ☘️ 運極周回可
+              <div className="text-right text-[10px] text-sky-300 font-num font-bold">
+                ドロップ対象
               </div>
             </div>
           ) : (
-            <div className="text-xs text-gray-500 text-center py-2 font-mono">ターゲットモンスター未割り当て</div>
+            <div className="text-xs text-slate-500 text-center py-1 font-mono">ターゲット未割り当て</div>
           )}
         </div>
 
-        {/* ⚡ 再生速度設定 ＆ ドロップ倍率計算パネル */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3 shadow-lg">
-          <div className="flex justify-between items-center border-b border-gray-800 pb-2">
-            <span className="text-xs font-black text-cyan-300 font-mono flex items-center gap-1">
-              ⚡ 再生速度 ＆ ドロップ率設定
+        {/* 速度 ＆ 倍率 */}
+        <div className="game-panel p-3.5 space-y-2.5">
+          <div className="flex justify-between items-center border-b border-[#213757] pb-1.5">
+            <span className="text-xs font-bold text-sky-300 font-num">
+              ⚡ 再生速度 ＆ ドロップ倍率
             </span>
-            <span className={`text-xs font-black font-mono px-2 py-0.5 rounded ${
-              dropMult > 1.0 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-            }`}>
-              ドロップ率倍率: ×{dropMult.toFixed(2)}
+            <span className="text-xs font-bold font-num text-amber-300">
+              ×{dropMult.toFixed(2)}
             </span>
           </div>
 
           <div className="space-y-2">
-            <div className="flex justify-between items-center text-xs font-mono">
-              <span className="text-gray-400">速度: <strong className="text-white text-sm">{speed.toFixed(1)}x</strong></span>
-              <span className="text-[10px] text-gray-500">（速いほどドロップ率大幅UP!）</span>
+            <div className="flex justify-between items-center text-xs font-num">
+              <span className="text-slate-400">速度: <strong className="text-white text-sm">{speed.toFixed(1)}x</strong></span>
             </div>
 
-            {/* 速度スライダー */}
             <input
               type="range"
               min={0.5}
@@ -227,19 +219,16 @@ export default function PreparePage() {
               step={0.1}
               value={speed}
               onChange={(e) => setSpeed(parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+              className="w-full h-2 bg-[#09111c] rounded-lg appearance-none cursor-pointer accent-sky-400"
             />
 
-            {/* クイック選択プリセットボタン */}
-            <div className="grid grid-cols-5 gap-1.5 pt-1">
+            <div className="grid grid-cols-5 gap-1 pt-1">
               {[0.6, 0.8, 1.0, 1.2, 1.5].map((preset) => (
                 <button
                   key={preset}
                   onClick={() => setSpeed(preset)}
-                  className={`py-1.5 text-[10px] font-black font-mono rounded-lg transition-all ${
-                    speed === preset
-                      ? 'bg-cyan-500 text-black shadow-md shadow-cyan-500/20'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  className={`py-1 text-[10px] font-bold font-num rounded-lg transition-all ${
+                    speed === preset ? 'bg-sky-600 text-white' : 'bg-[#0a1220] text-slate-300'
                   }`}
                 >
                   {preset}x
@@ -249,45 +238,36 @@ export default function PreparePage() {
           </div>
         </div>
 
-        {/* 出撃デッキ表示 */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3 shadow-lg">
-          <div className="flex justify-between items-center border-b border-gray-800 pb-2">
-            <span className="text-xs font-black text-indigo-300 font-mono">
-              ⚔️ 出撃デッキ (スロット 1〜3)
+        {/* デッキ */}
+        <div className="game-panel p-3.5 space-y-2">
+          <div className="flex justify-between items-center border-b border-[#213757] pb-1.5">
+            <span className="text-xs font-bold text-slate-200 font-num">
+              出撃デッキ
             </span>
             <Link
               href={`/party?fromClip=${id}`}
-              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg transition-colors"
+              className="px-2 py-0.5 bg-sky-700 hover:bg-sky-600 text-white text-[10px] font-bold rounded-lg"
             >
-              編成を変更
+              変更
             </Link>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {[0, 1, 2].map((slotIdx) => {
               const m = partySlots[slotIdx];
               const luck = m && m.user_monsters && m.user_monsters.length > 0 ? m.user_monsters[0].luck : 0;
 
               return (
-                <div
-                  key={slotIdx}
-                  className="bg-gray-950 border border-gray-800 rounded-xl p-2.5 text-center space-y-1.5 flex flex-col justify-between"
-                >
-                  <div className="text-[9px] text-gray-500 font-mono font-bold">
-                    #{slotIdx + 1} {slotIdx === 0 && "👑"}
-                  </div>
-
+                <div key={slotIdx} className="bg-[#09111c] border border-[#213757] rounded-xl p-2 text-center space-y-1">
                   {m ? (
                     <>
-                      <img src={m.image_url} alt={m.name} className="w-14 h-14 object-cover rounded-lg mx-auto border border-indigo-500/50" />
-                      <div>
-                        <div className="text-[9px] text-amber-400">{"★".repeat(m.rarity)}</div>
-                        <div className="text-[11px] font-bold truncate">{m.name}</div>
-                        <div className="text-[9px] text-cyan-300 font-mono">☘️ {luck}</div>
-                      </div>
+                      <img src={m.image_url} alt={m.name} className="w-12 h-12 object-cover rounded-lg mx-auto border border-[#2a4870]" />
+                      <div className="text-[9px] text-amber-400 font-num">{"★".repeat(m.rarity)}</div>
+                      <div className="text-[10px] font-bold truncate text-white">{m.name}</div>
+                      <div className="text-[8px] text-sky-300 font-num">☘️ {luck}</div>
                     </>
                   ) : (
-                    <div className="py-6 text-gray-700 text-xs font-bold">未設定</div>
+                    <div className="py-5 text-slate-600 text-[10px] font-mono">未設定</div>
                   )}
                 </div>
               );
@@ -295,26 +275,11 @@ export default function PreparePage() {
           </div>
         </div>
 
-        {/* ステータスサマリー */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3.5 text-xs font-mono grid grid-cols-2 gap-2 text-gray-300">
-          <div className="bg-gray-950 p-2 rounded-lg border border-gray-800">
-            <span className="text-gray-500 block text-[9px]">知力 (INT)</span>
-            <span className="text-sm font-black text-blue-400">{stats.int}</span>
-            <span className="text-[9px] text-gray-400 block">XP: {stats.xpMult}倍</span>
-          </div>
-          <div className="bg-gray-950 p-2 rounded-lg border border-gray-800">
-            <span className="text-gray-500 block text-[9px]">聴力 (EAR)</span>
-            <span className="text-sm font-black text-green-400">{stats.ear}</span>
-            <span className="text-[9px] text-gray-400 block">ドロップ: +{stats.earDropBonus}pt</span>
-          </div>
-        </div>
-
-        {/* 出撃ボタン (speed パラメータを付与して遷移) */}
         <button
           onClick={() => router.push(`/clips/${id}?speed=${speed}`)}
-          className="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-600 to-cyan-600 hover:opacity-95 text-white font-black text-lg rounded-2xl shadow-2xl tracking-widest uppercase border border-cyan-400/30 transition-all flex items-center justify-center gap-2 animate-pulse"
+          className="w-full py-3.5 btn-game-yellow text-sm font-black rounded-2xl shadow uppercase tracking-wider"
         >
-          <span>🔥 出 撃 （学習スタート）</span>
+          ⚔️ 試練開始
         </button>
 
       </div>
