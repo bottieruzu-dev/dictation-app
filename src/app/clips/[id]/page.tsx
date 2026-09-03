@@ -176,9 +176,25 @@ function ClipBattleInner() {
         }
         setTargetMonster(boss);
 
+        // 難易度ティアごとの敵ステータス調整倍率（上級以下をマイルド化）
+        const tier = clipData.difficulty_tier || '中級';
         const dScore = clipData.difficulty_score || 50;
-        const bMaxHp = Math.round(dScore * 120 + (boss?.rarity || 1) * 800);
-        const bAtk = Math.round(dScore * 1.5 + (boss?.rarity || 1) * 25);
+
+        const tierMultMap: Record<string, { hp: number; atk: number }> = {
+          '初級': { hp: 0.15, atk: 0.2 },
+          '中級': { hp: 0.35, atk: 0.35 },
+          '上級': { hp: 0.60, atk: 0.5 },
+          '超上級': { hp: 1.0, atk: 1.0 },
+          '超絶': { hp: 1.6, atk: 1.5 },
+        };
+
+        const mult = tierMultMap[tier] || { hp: 0.5, atk: 0.5 };
+        const baseHp = dScore * 100 + (boss?.rarity || 1) * 500;
+        const baseAtk = dScore * 1.2 + (boss?.rarity || 1) * 20;
+
+        const bMaxHp = Math.max(300, Math.round(baseHp * mult.hp));
+        const bAtk = Math.max(20, Math.round(baseAtk * mult.atk));
+
         setBossMaxHp(bMaxHp);
         setBossHp(bMaxHp);
         setBossAtk(bAtk);
@@ -606,7 +622,6 @@ function ClipBattleInner() {
 
   const currentSeg = segments[activeSegIndex];
 
-  // クリップ切り出し動画（0sスタート）に対応するための相対時間計算
   const clipStartMs = clip?.start_ms ?? (segments[0]?.start_ms || 0);
   const relSegStart = currentSeg ? Math.max(0, (currentSeg.start_ms - clipStartMs) / 1000) : null;
   const relSegEnd = currentSeg ? Math.max(0, (currentSeg.end_ms - clipStartMs) / 1000) : null;
